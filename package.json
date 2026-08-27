@@ -2,7 +2,7 @@
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
   "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "wudream813",
   "engines": {
     "vscode": "^1.75.0"
@@ -24,7 +24,9 @@
   ],
   "icon": "media/icon.png",
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "onView:luogu-editor.toolbox",
+    "onView:luogu-editor.templates"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -41,13 +43,11 @@
       "luogu-editor": [
         {
           "id": "luogu-editor.toolbox",
-          "name": "格式工具箱",
-          "when": "editorLangId == markdown"
+          "name": "格式工具箱"
         },
         {
           "id": "luogu-editor.templates",
-          "name": "模板与工具",
-          "when": "editorLangId == markdown"
+          "name": "模板与工具"
         }
       ]
     },
@@ -239,5 +239,8 @@
     "type": "git",
     "url": "https://github.com/wudream813/LuoguMarkdownEditor-in-vscode"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.2"
+  }
 }
