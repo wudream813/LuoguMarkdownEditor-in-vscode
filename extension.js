@@ -309,13 +309,37 @@ function activate(context) {
     })
   );
 
+  // Cursor movement -> also sync scroll (backup trigger)
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection((e) => {
+      if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 30);
+      }
+    })
+  );
+
   // Theme toggle
-  let currentTheme = 'light';
+  let currentTheme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
+  // Send initial theme to preview when it opens
+  const origCreateOrShow = PreviewPanel.createOrShow;
+  PreviewPanel.createOrShow = function(ctx) {
+    const p = origCreateOrShow.call(this, ctx);
+    p.setTheme(currentTheme);
+    return p;
+  };
   context.subscriptions.push(
     vscode.commands.registerCommand('luogu-editor.toggleTheme', () => {
       currentTheme = currentTheme === 'light' ? 'dark' : 'light';
       if (PreviewPanel.instance) PreviewPanel.instance.setTheme(currentTheme);
       vscode.window.showInformationMessage(`预览主题: ${currentTheme === 'light' ? '亮色' : '暗色'}`);
+    })
+  );
+  // Follow VSCode theme changes automatically
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme((theme) => {
+      currentTheme = theme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
+      if (PreviewPanel.instance) PreviewPanel.instance.setTheme(currentTheme);
     })
   );
 

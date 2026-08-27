@@ -1,5 +1,5 @@
 /**
- * Preview webview script for Luogu Markdown Editor v1.0.7
+ * Preview webview script for Luogu Markdown Editor v1.0.8
  */
 (function () {
   'use strict';
@@ -16,6 +16,9 @@
   var previewEl = document.getElementById('previewContent');
   var vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
   var scrollSyncLock = false;
+
+  // Track loaded Bilibili videos by their src URL
+  var loadedBilibiliVideos = new Set();
 
   // ── Global functions for inline onclick handlers ──
 
@@ -39,13 +42,17 @@
   window.loadBilibiliPlayer = function (btn) {
     var src = btn.getAttribute('data-src');
     if (!src) return;
+    
+    // Track this video as loaded
+    loadedBilibiliVideos.add(src);
+    
     var iframe = document.createElement('iframe');
     iframe.src = src;
     iframe.style.cssText = 'width:100%;height:100%;border:none;position:absolute;top:0;left:0;';
     iframe.setAttribute('allowfullscreen', 'true');
     iframe.setAttribute('allow', 'autoplay; fullscreen');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
-    // No sandbox - Bilibili player needs same-origin for its API
+    
     var container = btn.closest('.luogu-bilibili-player-wrapper') || btn.parentNode;
     if (container) {
       btn.remove();
@@ -80,6 +87,19 @@
     });
   }
 
+  // ── Bilibili auto-load for previously loaded videos ──
+
+  function restoreBilibiliVideos() {
+    if (!previewEl || loadedBilibiliVideos.size === 0) return;
+    previewEl.querySelectorAll('.luogu-bilibili-facade').forEach(function (btn) {
+      var src = btn.getAttribute('data-src');
+      if (src && loadedBilibiliVideos.has(src)) {
+        // Auto-load this video
+        window.loadBilibiliPlayer(btn);
+      }
+    });
+  }
+
   // ── Render ──
 
   function render(markdown) {
@@ -87,6 +107,7 @@
     var saved = saveCalloutStates();
     previewEl.innerHTML = parser.render(markdown || '');
     restoreCalloutStates(saved);
+    restoreBilibiliVideos();
   }
 
   // ── Scroll sync ──
@@ -99,7 +120,6 @@
     previewEl.querySelectorAll('[data-src-line]').forEach(function (el) {
       var line = parseInt(el.getAttribute('data-src-line'), 10);
       if (isNaN(line) || seen[line]) return;
-      // Skip elements inside collapsed details
       if (el.closest && el.closest('details:not([open])')) return;
       seen[line] = true;
       anchors.push({ line: line, el: el });
@@ -107,16 +127,16 @@
     anchors.sort(function (a, b) { return a.line - b.line; });
     if (anchors.length === 0) return;
 
-    // Build pixel positions
-    var scrollTop = previewEl.scrollTop;
-    var containerTop = previewEl.getBoundingClientRect().top;
+    // The scrollable container is document.body (see preview.css)
+    var scrollContainer = document.body;
+    var scrollTop = scrollContainer.scrollTop;
+    var containerTop = scrollContainer.getBoundingClientRect().top;
+    
     var points = anchors.map(function (a) {
       return { line: a.line, top: a.el.getBoundingClientRect().top - containerTop + scrollTop };
     });
-    // Add end point
-    points.push({ line: 999999, top: previewEl.scrollHeight });
+    points.push({ line: 999999, top: scrollContainer.scrollHeight });
 
-    // Find interpolation segment
     var target = 0;
     for (var i = 0; i < points.length - 1; i++) {
       if (points[i].line <= topLine && points[i + 1].line >= topLine) {
@@ -127,12 +147,12 @@
       }
     }
 
-    var maxScroll = previewEl.scrollHeight - previewEl.clientHeight;
+    var maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
     var want = Math.max(0, Math.min(maxScroll, target));
 
-    if (Math.abs(previewEl.scrollTop - want) > 2) {
+    if (Math.abs(scrollContainer.scrollTop - want) > 2) {
       scrollSyncLock = true;
-      previewEl.scrollTop = want;
+      scrollContainer.scrollTop = want;
       setTimeout(function () { scrollSyncLock = false; }, 80);
     }
   }
@@ -141,9 +161,11 @@
 
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    // Also add class to body for CSS compatibility
     document.body.classList.remove('vscode-light', 'vscode-dark');
     document.body.classList.add(theme === 'dark' ? 'vscode-dark' : 'vscode-light');
+    if (vscodeApi) {
+      vscodeApi.postMessage({ type: 'theme-changed', theme: theme });
+    }
   }
 
   // ── Message handler ──
@@ -157,7 +179,6 @@
         render(msg.content);
         break;
       case 'scroll-sync':
-        // Use rAF to wait for DOM to settle after render
         requestAnimationFrame(function () { scrollToLine(msg.topLine); });
         break;
       case 'set-theme':
@@ -175,7 +196,6 @@
       '<p style="font-size:14px;margin-top:12px;">Start editing to see live preview.</p></div>';
   }
 
-  // Notify extension host that webview is ready
   if (vscodeApi) {
     vscodeApi.postMessage({ type: 'ready' });
   }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.8] - 2026-08-27
+
+### 修复
+
+- **滚动同步**：修复滚动容器错误（使用 `document.body` 而非 `previewEl` 作为滚动容器）；新增 `onDidChangeTextEditorSelection` 作为备用触发器
+- **主题切换**：自动跟随 VSCode 主题（亮/暗）；切换命令现在正确生效
+- **Bilibili 持久化**：已加载的 Bilibili 视频在重新渲染后自动恢复，无需再次点击
+
 ## [1.0.7] - 2026-08-27
 
 ### 修复
