@@ -87,10 +87,10 @@ class ToolboxProvider {
     }
     if (label === '洛谷折叠框') {
       return [
-        new ToolboxItem('📘 info 提示框', 'luogu-editor.insertCalloutInfo', 'info', ':::info'),
-        new ToolboxItem('📗 success 成功框', 'luogu-editor.insertCalloutSuccess', 'pass', ':::success'),
-        new ToolboxItem('📙 warning 警告框', 'luogu-editor.insertCalloutWarning', 'warning', ':::warning'),
-        new ToolboxItem('📕 error 错误框', 'luogu-editor.insertCalloutError', 'error', ':::error'),
+        new ToolboxItem('info 提示框', 'luogu-editor.insertCalloutInfo', 'info', ':::info'),
+        new ToolboxItem('success 成功框', 'luogu-editor.insertCalloutSuccess', 'pass', ':::success'),
+        new ToolboxItem('warning 警告框', 'luogu-editor.insertCalloutWarning', 'warning', ':::warning'),
+        new ToolboxItem('error 错误框', 'luogu-editor.insertCalloutError', 'error', ':::error'),
       ];
     }
     if (label === '表格与排版') {
@@ -138,16 +138,16 @@ class TemplatesProvider {
 
     if (element.label === '洛谷模板') {
       return [
-        new ToolboxItem('🌟 语法全特性演示', 'luogu-editor.insertTemplateDemo', 'star-full'),
-        new ToolboxItem('🏆 标准题解模板', 'luogu-editor.insertTemplateSolution', 'trophy'),
-        new ToolboxItem('📝 题目题面模板', 'luogu-editor.insertTemplateProblem', 'edit'),
-        new ToolboxItem('📚 学术/文章专栏', 'luogu-editor.insertTemplateArticle', 'library'),
+        new ToolboxItem('语法全特性演示', 'luogu-editor.insertTemplateDemo', 'star-full'),
+        new ToolboxItem('标准题解模板', 'luogu-editor.insertTemplateSolution', 'trophy'),
+        new ToolboxItem('题目题面模板', 'luogu-editor.insertTemplateProblem', 'edit'),
+        new ToolboxItem('学术/文章专栏', 'luogu-editor.insertTemplateArticle', 'library'),
       ];
     }
     if (element.label === '工具') {
       return [
-        new ToolboxItem('⚡ 一键排版修复', 'luogu-editor.autoFixSpacing', 'zap'),
-        new ToolboxItem('📋 复制 Markdown 源码', 'luogu-editor.copyMarkdown', 'copy'),
+        new ToolboxItem('一键排版修复', 'luogu-editor.autoFixSpacing', 'zap'),
+        new ToolboxItem('复制 Markdown 源码', 'luogu-editor.copyMarkdown', 'copy'),
       ];
     }
     return [];
@@ -207,6 +207,15 @@ class PreviewPanel {
     this.panel.webview.postMessage({
       type: 'update',
       content: markdownContent,
+    });
+  }
+
+  scrollSync(topLine, fraction) {
+    if (!this.panel) return;
+    this.panel.webview.postMessage({
+      type: 'scroll-sync',
+      topLine: topLine,
+      fraction: fraction || 0,
     });
   }
 
@@ -305,7 +314,7 @@ async function replaceAllContent(text) {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  console.log('洛谷 Markdown 编辑器 v1.0.1 已激活');
+  console.log('Luogu Markdown Editor v1.0.4 activated');
 
   // ── Sidebar: Toolbox ──
   const toolboxProvider = new ToolboxProvider();
@@ -357,6 +366,32 @@ function activate(context) {
         PreviewPanel.instance
       ) {
         PreviewPanel.instance.update(editor.document.getText());
+      }
+    })
+  );
+
+  // ── Scroll sync: editor viewport → preview ──
+  // Based on the top visible line in the editor, not cursor position.
+  let scrollSyncTimer = null;
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
+      if (
+        e.textEditor.document.languageId === 'markdown' &&
+        PreviewPanel.instance
+      ) {
+        // Debounce: at most one sync per animation frame (~16ms)
+        if (scrollSyncTimer) return;
+        scrollSyncTimer = setTimeout(() => {
+          scrollSyncTimer = null;
+          const topRange = e.textEditor.visibleRanges[0];
+          if (topRange) {
+            const topLine = topRange.start.line;
+            // Compute fraction: how far the top line is scrolled past its start
+            const lineHeight = e.textEditor.options.lineHeight || 20;
+            const fraction = 0; // VSCode gives us line-level precision
+            PreviewPanel.instance.scrollSync(topLine, fraction);
+          }
+        }, 30);
       }
     })
   );
@@ -455,7 +490,7 @@ function activate(context) {
     const editor = vscode.window.activeTextEditor;
     if (editor && editor.document.languageId === 'markdown') {
       vscode.env.clipboard.writeText(editor.document.getText());
-      vscode.window.showInformationMessage('✅ 已复制洛谷 Markdown 源码！');
+      vscode.window.showInformationMessage('已复制洛谷 Markdown 源码');
     }
   });
 
@@ -473,9 +508,9 @@ function activate(context) {
       const fixed = fixSpacing(text);
       if (text !== fixed) {
         replaceAllContent(fixed);
-        vscode.window.showInformationMessage('✅ 已完成排版规范修复！');
+        vscode.window.showInformationMessage('已完成排版规范修复');
       } else {
-        vscode.window.showInformationMessage('✨ 排版已完全符合规范！');
+        vscode.window.showInformationMessage('排版已完全符合规范');
       }
     } catch (e) {
       vscode.window.showErrorMessage('排版修复失败：' + e.message);
@@ -528,7 +563,7 @@ async function insertTemplateFromFile(key) {
       );
       if (confirm === '确定') {
         replaceAllContent(templates[key]);
-        vscode.window.showInformationMessage('✅ 模板应用成功！');
+        vscode.window.showInformationMessage('模板应用成功');
       }
     }
   } catch (e) {
@@ -547,7 +582,7 @@ async function insertTemplateFromFile(key) {
     );
     if (confirm === '确定') {
       replaceAllContent(tpl);
-      vscode.window.showInformationMessage('✅ 模板应用成功！');
+      vscode.window.showInformationMessage('模板应用成功');
     }
   }
 }
