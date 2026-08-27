@@ -493,6 +493,11 @@
         // 8. Blockquotes (> ...)
         if (/^\s*>/.test(line)) {
           const quoteLines = [];
+          // Record the quote's starting DOCUMENT line: the recursive parseBlocks
+          // gets lineOffset so tasks inside quotes carry real source line numbers
+          // (data-task-line) — without this every task index/line inside a quote
+          // would be relative to the quote itself and edits would hit wrong lines.
+          const quoteBase = srcLineOf[i];
           while (i < n && (/^\s*>/.test(lines[i]) || (quoteLines.length > 0 && !/^\s*$/.test(lines[i]) && !/^(\#{1,6}|[`~]{3,}|\||:{3,})/.test(lines[i].trim())))) {
             if (/^\s*>/.test(lines[i])) {
               quoteLines.push(lines[i].replace(/^\s*>\s?/, ''));
@@ -501,14 +506,14 @@
             }
             i++;
           }
-          const innerHtml = this.parseBlocks(quoteLines);
+          const innerHtml = this.parseBlocks(quoteLines, quoteBase);
           out.push(`<blockquote class="luogu-blockquote">${innerHtml}</blockquote>`);
           continue;
         }
 
         // 9. Lists (Unordered, Ordered, Task lists)
         if (/^\s*([*+-]|\d+\.)\s+/.test(line)) {
-          const listResult = this.parseList(lines, i);
+          const listResult = this.parseList(lines, i, srcLineOf);
           out.push(listResult.html);
           i = listResult.nextIndex;
           continue;
@@ -583,13 +588,14 @@
       // Align blocks
       if (type === 'align') {
         const alignMode = (param || 'center').toLowerCase();
-        const innerHtml = this.parseBlocks(innerLines);
+        // Pass the document line offset so task checkboxes inside get real line numbers
+        const innerHtml = this.parseBlocks(innerLines, startLine + 1);
         return `<div class="luogu-align-${alignMode}">${innerHtml}</div>`;
       }
 
       // Epigraph block
       if (type === 'epigraph') {
-        const innerHtml = this.parseBlocks(innerLines);
+        const innerHtml = this.parseBlocks(innerLines, startLine + 1);
         const authorHtml = title ? `<div class="luogu-epigraph-author">${this.renderInline(title)}</div>` : '';
         return `
           <div class="luogu-epigraph">
@@ -865,12 +871,15 @@
     }
 
     // Parse Lists (including tasks) — indentation-aware, supports nesting.
-    parseList(lines, startIndex) {
+    // `srcLineOf` maps lines[i] back to its DOCUMENT line; each task item stamps it
+    // into data-task-line so the extension can edit the exact source line instead of
+    // re-counting tasks with a second (divergent) scanning implementation.
+    parseList(lines, startIndex, srcLineOf) {
       let i = startIndex;
       const n = lines.length;
       while (i < n && /^\s*$/.test(lines[i])) i++;
       const baseIndent = this.indentOf(lines[i]);
-      return this.parseListAt(lines, i, baseIndent);
+      return this.parseListAt(lines, i, baseIndent, srcLineOf);
     }
 
     // Indentation of a line's leading whitespace (spaces + tabs).
@@ -886,7 +895,7 @@
 
     // Recursively parse all items at the given indentation level.
     // Returns { html, nextIndex }.
-    parseListAt(lines, startIndex, baseIndent) {
+    parseListAt(lines, startIndex, baseIndent, srcLineOf) {
       const n = lines.length;
       let i = startIndex;
       const isOrdered = /^\s*\d+\.\s+/.test(lines[i]);
@@ -912,13 +921,12 @@
         const match = line.match(/^(\s*)([*+-]|\d+\.)\s+(.*)$/);
         if (!match || this.indentOf(line) !== baseIndent) break;
 
+        const itemLineIndex = i;   // the source-array index of THIS item's first line
         let rawText = match[3];
         i++;
         let nestedHtml = '';
 
         // Detect a task marker now and assign its sequential index in source order.
-        // (editor.js's toggleTask maps data-task-index back to the Nth task line in the
-        // source, so the index must follow the source line order, not render/traversal order.)
         const taskMatch = rawText.match(/^\[([ xX])\]\s*(.*)$/);
         let taskIdx = null;
         if (taskMatch) {
@@ -945,7 +953,7 @@
           const isItem = this.isListItem(nl);
           if (isItem && nind === baseIndent) break;              // sibling at same level
           if (isItem && nind > baseIndent) {                     // nested list
-            const sub = this.parseListAt(lines, i, nind);
+            const sub = this.parseListAt(lines, i, nind, srcLineOf);
             nestedHtml += sub.html;
             i = sub.nextIndex;
             continue;
@@ -958,7 +966,9 @@
           break;                                                 // non-indented non-item ends item
         }
 
-        items.push({ rawText, nestedHtml, taskIdx, taskChecked: taskMatch ? taskMatch[1].toLowerCase() === 'x' : false });
+        items.push({ rawText, nestedHtml, taskIdx,
+          srcLine: srcLineOf ? srcLineOf[itemLineIndex] : -1,
+          taskChecked: taskMatch ? taskMatch[1].toLowerCase() === 'x' : false });
       }
 
       const renderedItems = items.map((it) => {
@@ -971,7 +981,7 @@
           const content = finalMatch ? finalMatch[2] : it.rawText;
           inner = `
             <label class="luogu-checkbox-label">
-              <input type="checkbox" class="luogu-task-checkbox" data-task-index="${it.taskIdx}" ${it.taskChecked ? 'checked' : ''} onchange="toggleTaskCheckbox(this)" />
+              <input type="checkbox" class="luogu-task-checkbox" data-task-index="${it.taskIdx}" data-task-line="${it.srcLine}" ${it.taskChecked ? 'checked' : ''} onchange="toggleTaskCheckbox(this)" />
               <span class="luogu-checkbox-custom"></span>
               <span class="luogu-task-text">${this.renderInline(content)}</span>
             </label>

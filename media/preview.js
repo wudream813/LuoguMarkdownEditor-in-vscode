@@ -85,13 +85,16 @@
   };
 
   window.toggleTaskCheckbox = function (checkbox) {
-    var taskIndex = checkbox.getAttribute('data-task-index');
+    var taskLine = checkbox.getAttribute('data-task-line');
     var isChecked = checkbox.checked;
 
-    if (vscodeApi && taskIndex !== null) {
+    if (vscodeApi && taskLine !== null) {
+      // Send the DOCUMENT LINE stamped by the parser (data-task-line), not a
+      // re-counted ordinal — two independent task-counting implementations can
+      // diverge on messy fences/quotes and flip the wrong line.
       vscodeApi.postMessage({
         type: 'toggle-task',
-        taskIndex: parseInt(taskIndex, 10),
+        taskLine: parseInt(taskLine, 10),
         checked: isChecked
       });
     }

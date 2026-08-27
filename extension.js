@@ -183,7 +183,7 @@ class PreviewPanel {
         // active editor, which may have moved to a different (e.g. non-markdown) file.
         const editor = this._findBoundEditor();
         if (editor) {
-          toggleTaskInEditor(editor, msg.taskIndex, msg.checked);
+          toggleTaskInEditor(editor, msg.taskLine, msg.checked);
         }
       }
     }, null, this.disposables);
@@ -512,62 +512,35 @@ function fixSpacing(text) {
 function deactivate() {}
 
 /**
- * Toggle a task checkbox in the markdown source by task index.
+ * Toggle a task checkbox in the markdown source, addressed by DOCUMENT LINE.
  *
- * The index must match the renderer's counting exactly, otherwise a click flips
- * the WRONG line. Two mismatches are fixed here:
- *  1. The renderer treats fenced code blocks as opaque — `- [ ]` examples inside
- *     a fence are NOT tasks. The old scan matched them (raw text), shifting every
- *     later index by the number of fenced examples.
- *  2. The renderer strips blockquote `>` prefixes before parsing, so `> - [ ]`
- *     counts as a task there. The old scan required the marker at line start and
- *     skipped those lines, shifting every earlier index.
+ * The webview sends the line the parser itself rendered (data-task-line), which
+ * replaced the old "count tasks again on this side" approach: any divergence
+ * between two task-counting implementations — e.g. the parser requires a closing
+ * fence to occupy the whole line while a rescan accepts ```cpp, or vice versa —
+ * silently flipped the wrong checkbox. A line number can never drift.
+ *
+ * Two defensive checks keep stale previews from writing garbage:
+ *  - the line must still look like a task item, otherwise the edit is dropped;
+ *  - if the checkbox already has the requested state, no edit is made at all.
  */
-async function toggleTaskInEditor(editor, taskIndex, checked) {
+async function toggleTaskInEditor(editor, taskLine, checked) {
+  if (taskLine === null || taskLine === undefined || Number.isNaN(taskLine)) return;
   const doc = editor.document;
-  const text = doc.getText();
-  const lines = text.split('\n');
+  if (taskLine < 0 || taskLine >= doc.lineCount) return;
 
-  let currentIndex = 0;
-  let inFence = false;
-  let fenceChar = '';
-  let fenceLen = 0;
+  const line = doc.lineAt(taskLine).text;
+  // Bullet or ordered marker, any depth of blockquote prefix ('> ').
+  const match = line.match(/^((?:\s*>\s?)*)(\s*(?:[-*+]|\d+\.)\s+)\[([ xX])\](.*)$/);
+  if (!match) return; // preview was stale; the line is no longer a task
 
-  for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-    const line = lines[lineNum];
+  const isCurrentlyChecked = match[3].toLowerCase() === 'x';
+  if (isCurrentlyChecked === Boolean(checked)) return; // already in the requested state
 
-    // Fence tracking — skip everything inside ``` / ~~~ blocks.
-    const fenceMatch = line.match(/^\s*([`~]{3,})/);
-    if (!inFence && fenceMatch) {
-      inFence = true;
-      fenceChar = fenceMatch[1][0];
-      fenceLen = fenceMatch[1].length;
-      continue;
-    }
-    if (inFence) {
-      if (fenceMatch && fenceMatch[1][0] === fenceChar && fenceMatch[1].length >= fenceLen) {
-        inFence = false;
-      }
-      continue;
-    }
-
-    // Task list items, allowing any depth of blockquote prefix (renderer sees the
-    // same line after stripping those) and both bullet / ordered markers.
-    const match = line.match(/^((?:\s*>\s?)*)(\s*(?:[-*+]|\d+\.)\s+)\[([ xX])\](.*)$/);
-    if (match) {
-      if (currentIndex === taskIndex) {
-        const newMark = checked ? 'x' : ' ';
-        const newLine = `${match[1]}${match[2]}[${newMark}]${match[4]}`;
-
-        const lineRange = doc.lineAt(lineNum).range;
-        await editor.edit(editBuilder => {
-          editBuilder.replace(lineRange, newLine);
-        });
-        return;
-      }
-      currentIndex++;
-    }
-  }
+  const newLine = `${match[1]}${match[2]}[${checked ? 'x' : ' '}]${match[4]}`;
+  await editor.edit(editBuilder => {
+    editBuilder.replace(doc.lineAt(taskLine).range, newLine);
+  });
 }
 
 module.exports = { activate, deactivate };
