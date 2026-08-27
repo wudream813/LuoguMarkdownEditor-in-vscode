@@ -47,25 +47,16 @@
     loadedBilibiliVideos.add(src);
     
     var iframe = document.createElement('iframe');
-    iframe.src = src;
+    iframe.setAttribute('src', src);
     iframe.setAttribute('scrolling', 'no');
     iframe.setAttribute('frameborder', 'no');
+    iframe.setAttribute('framespacing', '0');
     iframe.setAttribute('allowfullscreen', 'true');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
-    iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+    iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
     
-    var container = btn.closest('.luogu-bilibili-player-wrapper') || btn.parentNode;
-    if (container) {
-      // Ensure container has position:relative
-      if (getComputedStyle(container).position === 'static') {
-        container.style.position = 'relative';
-      }
-      btn.remove();
-      container.appendChild(iframe);
-    } else {
-      btn.replaceWith(iframe);
-    }
+    // Simply replace the button with the iframe
+    btn.replaceWith(iframe);
   };
 
   window.toggleTaskCheckbox = function () {};
@@ -117,9 +108,12 @@
   }
 
   // ── Scroll sync ──
+  
+  var isSyncing = false;
+  var scrollTimeout = null;
 
   function scrollToLine(topLine) {
-    if (!previewEl || scrollSyncLock) return;
+    if (!previewEl || isSyncing) return;
 
     var anchors = [];
     var seen = {};
@@ -135,20 +129,28 @@
 
     // The scrollable container is document.body (see preview.css)
     var scrollContainer = document.body;
-    var scrollTop = scrollContainer.scrollTop;
-    var containerTop = scrollContainer.getBoundingClientRect().top;
     
+    // Calculate positions for each anchor
     var points = anchors.map(function (a) {
-      return { line: a.line, top: a.el.getBoundingClientRect().top - containerTop + scrollTop };
+      var rect = a.el.getBoundingClientRect();
+      return { 
+        line: a.line, 
+        top: rect.top + scrollContainer.scrollTop - scrollContainer.getBoundingClientRect().top 
+      };
     });
+    
+    // Add endpoint
     points.push({ line: 999999, top: scrollContainer.scrollHeight });
 
+    // Find the two anchors that bracket our target line
     var target = 0;
     for (var i = 0; i < points.length - 1; i++) {
       if (points[i].line <= topLine && points[i + 1].line >= topLine) {
+        // Interpolate between these two points
         var span = points[i + 1].line - points[i].line;
         var t = span > 0 ? (topLine - points[i].line) / span : 0;
-        target = points[i].top + (points[i + 1].top - points[i].top) * Math.min(1, Math.max(0, t));
+        t = Math.max(0, Math.min(1, t));
+        target = points[i].top + (points[i + 1].top - points[i].top) * t;
         break;
       }
     }
@@ -157,9 +159,9 @@
     var want = Math.max(0, Math.min(maxScroll, target));
 
     if (Math.abs(scrollContainer.scrollTop - want) > 2) {
-      scrollSyncLock = true;
-      scrollContainer.scrollTop = want;
-      setTimeout(function () { scrollSyncLock = false; }, 80);
+      isSyncing = true;
+      scrollContainer.scrollTo({ top: want, behavior: 'smooth' });
+      setTimeout(function () { isSyncing = false; }, 150);
     }
   }
 

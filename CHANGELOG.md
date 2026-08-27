@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.10] - 2026-08-27
+
+### 修复
+
+- **Bilibili 视频黑屏**：iframe 属性与原版保持一致（scrolling, frameborder, framespacing, allowfullscreen, referrerpolicy, sandbox），使用简单的 replaceWith 替换按钮
+- **滚动同步僵硬**：使用 `scrollTo({ behavior: 'smooth' })` 实现平滑滚动；防抖时间从 30ms 降低到 16ms（一帧）；锁定超时从 80ms 增加到 150ms 以允许平滑滚动完成
+
 ## [1.0.9] - 2026-08-27
 
 ### 修复

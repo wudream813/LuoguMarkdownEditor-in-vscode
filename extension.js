@@ -304,7 +304,7 @@ function activate(context) {
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
         clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 30);
+        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 16);
       }
     })
   );
@@ -314,7 +314,7 @@ function activate(context) {
     vscode.window.onDidChangeTextEditorSelection((e) => {
       if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
         clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 30);
+        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 16);
       }
     })
   );
