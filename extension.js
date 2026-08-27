@@ -239,7 +239,7 @@ class PreviewPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${csp}; img-src ${csp} https: data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src 'unsafe-inline'; font-src ${csp}; img-src ${csp} https: data:; frame-src https:;">
   <title>洛谷 Markdown 预览</title>
   <link rel="stylesheet" href="${uri('katex/katex.min.css')}">
   <link rel="stylesheet" href="${uri('prism/prism-tomorrow.min.css')}">
@@ -328,10 +328,11 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('luogu-editor.openPreview', () => {
       const preview = PreviewPanel.createOrShow(context);
-      // Send current content
       const editor = vscode.window.activeTextEditor;
       if (editor && editor.document.languageId === 'markdown') {
         preview.update(editor.document.getText());
+        // Send initial scroll sync after a short delay for rendering
+        setTimeout(() => sendScrollSync(editor), 200);
       }
     })
   );
@@ -345,7 +346,7 @@ function activate(context) {
     })
   );
 
-  // ── Auto-sync: text changes → preview ──
+  // ── Auto-sync: text changes → preview + scroll sync ──
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (
@@ -353,6 +354,11 @@ function activate(context) {
         PreviewPanel.instance
       ) {
         PreviewPanel.instance.update(e.document.getText());
+        // Re-send scroll position after content update (render resets position)
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document === e.document) {
+          setTimeout(() => sendScrollSync(editor), 100);
+        }
       }
     })
   );
@@ -372,26 +378,24 @@ function activate(context) {
 
   // ── Scroll sync: editor viewport → preview ──
   // Based on the top visible line in the editor, not cursor position.
-  let scrollSyncTimer = null;
+  let lastScrollLine = 0;
+  let scrollSyncTimeout = null;
+
+  function sendScrollSync(editor) {
+    if (!PreviewPanel.instance || !editor) return;
+    const topRange = editor.visibleRanges[0];
+    if (topRange) {
+      lastScrollLine = topRange.start.line;
+      PreviewPanel.instance.scrollSync(lastScrollLine, 0);
+    }
+  }
+
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-      if (
-        e.textEditor.document.languageId === 'markdown' &&
-        PreviewPanel.instance
-      ) {
-        // Debounce: at most one sync per animation frame (~16ms)
-        if (scrollSyncTimer) return;
-        scrollSyncTimer = setTimeout(() => {
-          scrollSyncTimer = null;
-          const topRange = e.textEditor.visibleRanges[0];
-          if (topRange) {
-            const topLine = topRange.start.line;
-            // Compute fraction: how far the top line is scrolled past its start
-            const lineHeight = e.textEditor.options.lineHeight || 20;
-            const fraction = 0; // VSCode gives us line-level precision
-            PreviewPanel.instance.scrollSync(topLine, fraction);
-          }
-        }, 30);
+      if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
+        // Debounce: collapse rapid scroll events
+        clearTimeout(scrollSyncTimeout);
+        scrollSyncTimeout = setTimeout(() => sendScrollSync(e.textEditor), 20);
       }
     })
   );

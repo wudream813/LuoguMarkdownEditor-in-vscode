@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.5] - 2026-08-27
+
+### 修复
+
+- **代码块颜色**：修复 inline code 样式覆盖了 Prism.js 语法高亮颜色的问题，改为 `:not(pre) > code` 精确匹配
+- **滚动同步**：重构同步逻辑，编辑器滚动后 20ms 防抖发送行号到预览，内容更新后 100ms 重新同步位置，打开预览时 200ms 发送初始位置
+- **复制按钮**：CSP 添加 `script-src 'unsafe-inline'`，允许 onclick 事件处理器执行；preview.js 定义 `window.copyCodeBlock` 全局函数
+- **Bilibili 加载按钮**：CSP 添加 `frame-src https:`，允许 Bilibili iframe 加载
+- **折叠框状态保持**：预览面板在重新渲染前保存 `<details>` 的 open/closed 状态（按 `data-src-line` 匹配），渲染后恢复
+
 ## [1.0.4] - 2026-08-27
 
 ### 修复

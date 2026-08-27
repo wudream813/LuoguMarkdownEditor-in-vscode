@@ -70,13 +70,15 @@ body.vscode-high-contrast {
   color: var(--text-secondary);
 }
 
-.luogu-preview-root code,
+/* Inline code only - do NOT override code inside pre/code blocks (Prism highlighting) */
+.luogu-preview-root :not(pre) > code,
 .luogu-preview-root .luogu-inline-code {
   background: var(--bg-secondary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
 }
 
+/* Let Prism styles control code block colors */
 .luogu-preview-root pre,
 .luogu-preview-root .luogu-code-block-wrapper {
   border: 1px solid var(--border-color);
