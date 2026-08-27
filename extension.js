@@ -25,7 +25,7 @@ class ToolboxItem extends vscode.TreeItem {
       : undefined;
     this.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
     this.description = description || '';
-    this.tooltip = label;
+    this.tooltip = description ? `${label} → ${description}` : label;
   }
 }
 

@@ -2,7 +2,7 @@
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
   "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "wudream813",
   "engines": {
     "vscode": "^1.75.0"
@@ -34,7 +34,7 @@
       "activitybar": [
         {
           "id": "luogu-editor",
-          "title": "洛谷 Markdown",
+          "title": "Luogu Markdown",
           "icon": "media/sidebar-icon.svg"
         }
       ]
@@ -43,147 +43,149 @@
       "luogu-editor": [
         {
           "id": "luogu-editor.toolbox",
-          "name": "格式工具箱"
+          "name": "格式工具箱",
+          "visibility": "visible"
         },
         {
           "id": "luogu-editor.templates",
-          "name": "模板与工具"
+          "name": "模板与工具",
+          "visibility": "visible"
         }
       ]
     },
     "commands": [
       {
         "command": "luogu-editor.openPreview",
-        "title": "洛谷 Markdown: 打开实时预览",
+        "title": "Luogu Markdown: 打开实时预览",
         "icon": "$(open-preview)"
       },
       {
         "command": "luogu-editor.closePreview",
-        "title": "洛谷 Markdown: 关闭预览"
+        "title": "Luogu Markdown: 关闭预览"
       },
       {
         "command": "luogu-editor.copyMarkdown",
-        "title": "洛谷 Markdown: 复制 Markdown 源码"
+        "title": "Luogu Markdown: 复制 Markdown 源码"
       },
       {
         "command": "luogu-editor.autoFixSpacing",
-        "title": "洛谷 Markdown: 一键排版规范修复"
+        "title": "Luogu Markdown: 一键排版规范修复"
       },
       {
         "command": "luogu-editor.insertBold",
-        "title": "洛谷: 加粗"
+        "title": "Luogu Markdown: 加粗"
       },
       {
         "command": "luogu-editor.insertItalic",
-        "title": "洛谷: 斜体"
+        "title": "Luogu Markdown: 斜体"
       },
       {
         "command": "luogu-editor.insertStrikethrough",
-        "title": "洛谷: 删除线"
+        "title": "Luogu Markdown: 删除线"
       },
       {
         "command": "luogu-editor.insertHeading1",
-        "title": "洛谷: H1 标题"
+        "title": "Luogu Markdown: H1 标题"
       },
       {
         "command": "luogu-editor.insertHeading2",
-        "title": "洛谷: H2 标题"
+        "title": "Luogu Markdown: H2 标题"
       },
       {
         "command": "luogu-editor.insertHeading3",
-        "title": "洛谷: H3 标题"
+        "title": "Luogu Markdown: H3 标题"
       },
       {
         "command": "luogu-editor.insertHeading4",
-        "title": "洛谷: H4 标题"
+        "title": "Luogu Markdown: H4 标题"
       },
       {
         "command": "luogu-editor.insertInlineCode",
-        "title": "洛谷: 行内代码"
+        "title": "Luogu Markdown: 行内代码"
       },
       {
         "command": "luogu-editor.insertCodeBlock",
-        "title": "洛谷: 代码块"
+        "title": "Luogu Markdown: 代码块"
       },
       {
         "command": "luogu-editor.insertQuote",
-        "title": "洛谷: 引用"
+        "title": "Luogu Markdown: 引用"
       },
       {
         "command": "luogu-editor.insertMathInline",
-        "title": "洛谷: 行内公式"
+        "title": "Luogu Markdown: 行内公式"
       },
       {
         "command": "luogu-editor.insertMathBlock",
-        "title": "洛谷: 行间公式"
+        "title": "Luogu Markdown: 行间公式"
       },
       {
         "command": "luogu-editor.insertCalloutInfo",
-        "title": "洛谷: info 折叠框"
+        "title": "Luogu Markdown: info 折叠框"
       },
       {
         "command": "luogu-editor.insertCalloutSuccess",
-        "title": "洛谷: success 折叠框"
+        "title": "Luogu Markdown: success 折叠框"
       },
       {
         "command": "luogu-editor.insertCalloutWarning",
-        "title": "洛谷: warning 折叠框"
+        "title": "Luogu Markdown: warning 折叠框"
       },
       {
         "command": "luogu-editor.insertCalloutError",
-        "title": "洛谷: error 折叠框"
+        "title": "Luogu Markdown: error 折叠框"
       },
       {
         "command": "luogu-editor.insertTable",
-        "title": "洛谷: 插入表格"
+        "title": "Luogu Markdown: 插入表格"
       },
       {
         "command": "luogu-editor.insertEpigraph",
-        "title": "洛谷: 引言"
+        "title": "Luogu Markdown: 引言"
       },
       {
         "command": "luogu-editor.insertAlignCenter",
-        "title": "洛谷: 居中"
+        "title": "Luogu Markdown: 居中"
       },
       {
         "command": "luogu-editor.insertAlignRight",
-        "title": "洛谷: 居右"
+        "title": "Luogu Markdown: 居右"
       },
       {
         "command": "luogu-editor.insertBilibili",
-        "title": "洛谷: Bilibili 视频"
+        "title": "Luogu Markdown: Bilibili 视频"
       },
       {
         "command": "luogu-editor.insertLink",
-        "title": "洛谷: 链接"
+        "title": "Luogu Markdown: 链接"
       },
       {
         "command": "luogu-editor.insertImage",
-        "title": "洛谷: 图片"
+        "title": "Luogu Markdown: 图片"
       },
       {
         "command": "luogu-editor.insertTaskList",
-        "title": "洛谷: 任务列表"
+        "title": "Luogu Markdown: 任务列表"
       },
       {
         "command": "luogu-editor.insertHR",
-        "title": "洛谷: 分割线"
+        "title": "Luogu Markdown: 分割线"
       },
       {
         "command": "luogu-editor.insertTemplateDemo",
-        "title": "洛谷: 全特性演示模板"
+        "title": "Luogu Markdown: 全特性演示模板"
       },
       {
         "command": "luogu-editor.insertTemplateSolution",
-        "title": "洛谷: 题解模板"
+        "title": "Luogu Markdown: 题解模板"
       },
       {
         "command": "luogu-editor.insertTemplateProblem",
-        "title": "洛谷: 题面模板"
+        "title": "Luogu Markdown: 题面模板"
       },
       {
         "command": "luogu-editor.insertTemplateArticle",
-        "title": "洛谷: 学术文章模板"
+        "title": "Luogu Markdown: 学术文章模板"
       }
     ],
     "menus": {
@@ -213,7 +215,7 @@
       ]
     },
     "configuration": {
-      "title": "洛谷 Markdown 编辑器",
+      "title": "Luogu Markdown",
       "properties": {
         "luogu-editor.theme": {
           "type": "string",
@@ -239,8 +241,5 @@
     "type": "git",
     "url": "https://github.com/wudream813/LuoguMarkdownEditor-in-vscode"
   },
-  "license": "MIT",
-  "devDependencies": {
-    "@vscode/vsce": "^3.9.2"
-  }
+  "license": "MIT"
 }

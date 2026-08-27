@@ -2,3 +2,4 @@ node_modules/
 *.vsix
 .vscode-test/
 out/
+package-lock.json

@@ -6,6 +6,4 @@ node_modules
 test/
 *.map
 *.vsix
-media/luogu-templates.js
-media/luogu-linter.js
-media/luogu-math-cheatsheet.js
+package-lock.json
