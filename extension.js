@@ -155,6 +155,12 @@ class PreviewPanel {
             if (topRange) this.scrollSync(topRange.start.line);
           }, 300);
         }
+      } else if (msg.type === 'toggle-task') {
+        // Toggle task checkbox in markdown source
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document.languageId === 'markdown') {
+          toggleTaskInEditor(editor, msg.taskIndex, msg.checked);
+        }
       }
     }, null, this.disposables);
   }
@@ -439,4 +445,36 @@ function fixSpacing(text) {
 }
 
 function deactivate() {}
+
+/**
+ * Toggle a task checkbox in the markdown source by task index
+ */
+async function toggleTaskInEditor(editor, taskIndex, checked) {
+  const doc = editor.document;
+  const text = doc.getText();
+  const lines = text.split('\n');
+  
+  let currentIndex = 0;
+  for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+    const line = lines[lineNum];
+    // Match task list items: - [ ] or - [x] or * [ ] or * [x] or + [ ] or + [x]
+    const match = line.match(/^(\s*[-*+]\s+)\[([ xX])\](.*)$/);
+    if (match) {
+      if (currentIndex === taskIndex) {
+        const prefix = match[1];
+        const suffix = match[3];
+        const newMark = checked ? 'x' : ' ';
+        const newLine = `${prefix}[${newMark}]${suffix}`;
+        
+        const lineRange = doc.lineAt(lineNum).range;
+        await editor.edit(editBuilder => {
+          editBuilder.replace(lineRange, newLine);
+        });
+        return;
+      }
+      currentIndex++;
+    }
+  }
+}
+
 module.exports = { activate, deactivate };

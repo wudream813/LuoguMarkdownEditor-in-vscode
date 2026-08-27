@@ -55,11 +55,28 @@
     iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
     
-    // Simply replace the button with the iframe
-    btn.replaceWith(iframe);
+    // Find the wrapper and replace button with iframe
+    var wrapper = btn.closest('.luogu-bilibili-player-wrapper');
+    if (wrapper) {
+      wrapper.innerHTML = '';
+      wrapper.appendChild(iframe);
+    } else {
+      btn.replaceWith(iframe);
+    }
   };
 
-  window.toggleTaskCheckbox = function () {};
+  window.toggleTaskCheckbox = function (checkbox) {
+    var taskIndex = checkbox.getAttribute('data-task-index');
+    var isChecked = checkbox.checked;
+    
+    if (vscodeApi && taskIndex !== null) {
+      vscodeApi.postMessage({
+        type: 'toggle-task',
+        taskIndex: parseInt(taskIndex, 10),
+        checked: isChecked
+      });
+    }
+  };
 
   // ── Callout state preservation ──
 

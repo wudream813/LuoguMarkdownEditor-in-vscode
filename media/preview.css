@@ -42,7 +42,7 @@ body.vscode-high-contrast {
 .preview-content,
 .luogu-preview-root {
   max-width: 100%;
-  padding: 20px 24px 60px;
+  padding: 20px 24px 80vh;
   box-sizing: border-box;
   line-height: 1.8;
   word-wrap: break-word;
@@ -104,7 +104,7 @@ body.vscode-high-contrast {
 }
 ::-webkit-scrollbar-track { background: transparent; }
 
-.luogu-preview-root .luogu-task-checkbox { pointer-events: none; }
+.luogu-preview-root .luogu-task-checkbox { cursor: pointer; }
 
 .toast-container { position: fixed; bottom: 16px; right: 16px; z-index: 10000; }
 .luogu-preview-root .luogu-bilibili-facade { background: var(--bg-secondary); }
