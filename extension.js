@@ -239,7 +239,7 @@ class PreviewPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src 'unsafe-inline'; font-src ${csp}; img-src ${csp} https: data:; frame-src https:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src ${csp} 'unsafe-inline'; font-src ${csp}; img-src ${csp} https: data:; frame-src https:;">
   <title>洛谷 Markdown 预览</title>
   <link rel="stylesheet" href="${uri('katex/katex.min.css')}">
   <link rel="stylesheet" href="${uri('prism/prism-tomorrow.min.css')}">

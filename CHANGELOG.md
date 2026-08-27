@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.6] - 2026-08-27
+
+### 修复
+
+- **预览空白**：v1.0.5 的 CSP `script-src` 漏掉了 `${csp}`（webview 资源域名），导致解析器、KaTeX、Prism 等外部脚本全部被拦截。修复为 `script-src ${csp} 'unsafe-inline'`
+
 ## [1.0.5] - 2026-08-27
 
 ### 修复
