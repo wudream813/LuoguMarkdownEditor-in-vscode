@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.9] - 2026-08-27
+
+### 修复
+
+- **Bilibili 视频加载**：iframe 使用正确的 sandbox 属性（allow-scripts allow-popups allow-presentation）；CSP 显式允许 player.bilibili.com；确保容器有 position:relative
+- **设置项精简**：移除主题配置项（主题现在自动跟随 VSCode）
+
 ## [1.0.8] - 2026-08-27
 
 ### 修复

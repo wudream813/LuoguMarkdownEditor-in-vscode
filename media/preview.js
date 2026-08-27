@@ -48,13 +48,19 @@
     
     var iframe = document.createElement('iframe');
     iframe.src = src;
-    iframe.style.cssText = 'width:100%;height:100%;border:none;position:absolute;top:0;left:0;';
+    iframe.setAttribute('scrolling', 'no');
+    iframe.setAttribute('frameborder', 'no');
     iframe.setAttribute('allowfullscreen', 'true');
-    iframe.setAttribute('allow', 'autoplay; fullscreen');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
+    iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
     
     var container = btn.closest('.luogu-bilibili-player-wrapper') || btn.parentNode;
     if (container) {
+      // Ensure container has position:relative
+      if (getComputedStyle(container).position === 'static') {
+        container.style.position = 'relative';
+      }
       btn.remove();
       container.appendChild(iframe);
     } else {

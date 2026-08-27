@@ -192,7 +192,7 @@ class PreviewPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src ${csp} 'unsafe-inline'; font-src ${csp}; img-src ${csp} https: data:; frame-src https: http:; media-src https: http:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src ${csp} 'unsafe-inline'; font-src ${csp}; img-src ${csp} https: data:; frame-src https://player.bilibili.com https: http:; media-src https: http:;">
   <title>Luogu Preview</title>
   <link rel="stylesheet" href="${u('katex/katex.min.css')}">
   <link rel="stylesheet" href="${u('prism/prism-tomorrow.min.css')}">
