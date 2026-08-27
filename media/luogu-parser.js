@@ -272,15 +272,26 @@
       // document size. A 133 KB document took ~6.3 s; this version takes ~0.6 s.
       const replacements = new Map();
 
+      // trust as a predicate instead of `true`: allow \href/\url ONLY for safe URL
+      // schemes. `trust: true` also honoured \href{javascript:...}{...}, an XSS
+      // hole that bypassed sanitizeUrl entirely when pasting someone else's
+      // solution into the editor (verified: rendered output kept the js: link).
+      const safeTrust = (context) => {
+        if (context.command === '\\href' || context.command === '\\url') {
+          return /^(?:https?:|mailto:)/i.test(String(context.url || ''));
+        }
+        return false;
+      };
+
       for (const item of store) {
         let rendered = '';
         if (katexLib) {
           const displayMode = item.type === 'display';
-          const opts = { displayMode, throwOnError: false, output: 'htmlAndMathml', trust: true };
+          const opts = { displayMode, throwOnError: false, output: 'htmlAndMathml', trust: safeTrust };
           rendered = renderKatexCached(
             katexLib,
             item.formula,
-            `${katexLib.version || 'katex'}\u0001${displayMode}\u0001htmlAndMathml\u0001trust`,
+            `${katexLib.version || 'katex'}\u0001${displayMode}\u0001htmlAndMathml\u0001safeTrust`,
             opts,
             (e) => `<span class="katex-error" title="${escapeHtml(e.message)}">${escapeHtml(item.formula)}</span>`
           );
@@ -745,7 +756,10 @@
         let trimmed = line.trim();
         if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
         if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
-        const cells = trimmed.split('|').map(c => c.trim());
+        // Split on UNESCAPED pipes so a literal \| stays inside its cell — the
+        // escape pass in renderInline turns it into the visible character. The
+        // plain split('|') silently broke cells containing an escaped pipe.
+        const cells = trimmed.split(/(?<!\\)\|/).map(c => c.trim());
         parsedRows.push(cells);
       }
 
@@ -1040,8 +1054,10 @@
       });
 
       // 3. Images and Bilibili Video Embed (protect as tokens before emphasis)
+      // URL group tolerates ONE level of balanced parens (e.g. Wikipedia's
+      // ".../Foo_(bar)") — plain (.*?) truncated the URL at the first ')'.
       const mediaTokens = [];
-      s = s.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, target) => {
+      s = s.replace(/!\[(.*?)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, alt, target) => {
         let rawTarget = target.trim();
         let title = '';
         const titleMatch = rawTarget.match(/^(.*?)\s+["'](.*?)["']$/);
@@ -1096,8 +1112,8 @@
         return id;
       });
 
-      // Standard links: [text](url "title")
-      s = s.replace(/\[([^\]]+)\]\((.*?)\)/g, (match, label, target) => {
+      // Standard links: [text](url "title") — same balanced-paren URL group as images
+      s = s.replace(/\[([^\]]+)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, label, target) => {
         let rawTarget = target.trim();
         let title = '';
         const titleMatch = rawTarget.match(/^(.*?)\s+["'](.*?)["']$/);
@@ -1121,7 +1137,10 @@
       // 5. Emphasis & Strikethrough
       // Bold + Italic combinations:
       s = s.replace(/\*\*\*([^\*\s][^\*]*?[^\*\s]|[^\*\s])\*\*\*/g, '<strong><em>$1</em></strong>');
-      s = s.replace(/___([^_ \n][^_]*?[^_ \n]|[^_ \n])___/g, '<strong><em>$1</em></strong>');
+      // `_`-based emphasis gets word-boundary guards: CommonMark forbids intraword
+      // `_` emphasis, and the old regex mangled code-ish text like `a_b_c` or
+      // `some_LONG_name` into <em> runs whenever it appeared outside code spans.
+      s = s.replace(/(^|[^A-Za-z0-9_])___([^_ \n][^_]*?[^_ \n]|[^_ \n])___(?![A-Za-z0-9_])/g, '$1<strong><em>$2</em></strong>');
       s = s.replace(/\*\*_\s*([^\*_]+?)\s*_\*\*/g, '<strong><em>$1</em></strong>');
       s = s.replace(/_\*\*\s*([^\*_]+?)\s*\*\*_/g, '<em><strong>$1</strong></em>');
       s = s.replace(/\*__\s*([^\*_]+?)\s*__\*/g, '<em><strong>$1</strong></em>');
@@ -1129,11 +1148,11 @@
 
       // Bold: **text** or __text__
       s = s.replace(/\*\*([^\*\s][^\*]*?[^\*\s]|[^\*\s])\*\*/g, '<strong>$1</strong>');
-      s = s.replace(/__([^_ \n][^_]*?[^_ \n]|[^_ \n])__/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^A-Za-z0-9_])__([^_ \n][^_]*?[^_ \n]|[^_ \n])__(?![A-Za-z0-9_])/g, '$1<strong>$2</strong>');
 
       // Italic: *text* or _text_
       s = s.replace(/(^|[^\*])\*([^\*\s][^\*]*?[^\*\s]|[^\*\s])\*(?!\*)/g, '$1<em>$2</em>');
-      s = s.replace(/(^|[^_])_([^_ \n][^_]*?[^_ \n]|[^_ \n])_(?!_)/g, '$1<em>$2</em>');
+      s = s.replace(/(^|[^A-Za-z0-9_])_([^_ \n][^_]*?[^_ \n]|[^_ \n])_(?![A-Za-z0-9_])/g, '$1<em>$2</em>');
 
       // Strikethrough: ~~text~~
       s = s.replace(/~~([^~\s][^~]*?[^~\s]|[^~\s])~~/g, '<del>$1</del>');

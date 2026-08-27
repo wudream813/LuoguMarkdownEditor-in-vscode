@@ -1,9 +1,19 @@
 /**
- * Luogu Markdown Editor v1.0.7 - VSCode Extension
+ * Luogu Markdown Editor v1.0.12 - VSCode Extension
  */
 
 const vscode = require('vscode');
 const path = require('path');
+
+// Full preset template library (exported for both web and Node — shared file).
+// Previously dead code: the sidebar inserted the tiny hard-coded fallbacks below
+// instead of the rich templates the author actually wrote in this file.
+let LuoguTemplates = {};
+try {
+  LuoguTemplates = require('./media/luogu-templates.js').LuoguTemplates || {};
+} catch (e) {
+  // File missing/corrupt — fall through to the built-in minimal fallbacks.
+}
 
 // ────────────────────────────────────────────────────────────────
 // Sidebar
@@ -121,6 +131,12 @@ class TemplatesProvider {
 class PreviewPanel {
   static instance = null;
 
+  // Theme to hand to the webview in its 'ready' handshake. postMessage calls made
+  // BEFORE the webview's scripts run are silently dropped — the previous code sent
+  // setTheme immediately after creating the panel, lost it, and a dark-theme user
+  // got a light preview until they toggled manually.
+  static initialTheme = 'light';
+
   static createOrShow(context) {
     if (PreviewPanel.instance) {
       PreviewPanel.instance.panel.reveal(vscode.ViewColumn.Beside);
@@ -140,15 +156,22 @@ class PreviewPanel {
     this.context = context;
     this.disposables = [];
     this.currentTheme = 'light';
+    // URI of the document this preview is showing. Without this, an edit to ANY
+    // markdown file in the workspace pushed itself into the preview, and task
+    // toggles were applied to whatever editor happened to be active.
+    this.boundUri = null;
     this.panel.webview.html = this._getHtml();
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
     // Handle messages from webview
     this.panel.webview.onDidReceiveMessage((msg) => {
       if (msg.type === 'ready') {
-        // Webview finished loading, send initial content + scroll
+        // Webview finished loading. Apply the pending theme FIRST (this is the
+        // only reliable point — earlier posts are dropped), then content+scroll.
+        this.setTheme(PreviewPanel.initialTheme);
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document.languageId === 'markdown') {
+          this.boundUri = editor.document.uri.toString();
           this.update(editor.document.getText());
           setTimeout(() => {
             const topRange = editor.visibleRanges[0];
@@ -156,13 +179,27 @@ class PreviewPanel {
           }, 300);
         }
       } else if (msg.type === 'toggle-task') {
-        // Toggle task checkbox in markdown source
-        const editor = vscode.window.activeTextEditor;
-        if (editor && editor.document.languageId === 'markdown') {
+        // Toggle task checkbox in the document the preview is BOUND to — not the
+        // active editor, which may have moved to a different (e.g. non-markdown) file.
+        const editor = this._findBoundEditor();
+        if (editor) {
           toggleTaskInEditor(editor, msg.taskIndex, msg.checked);
         }
       }
     }, null, this.disposables);
+  }
+
+  // The editor currently displaying the bound document; falls back to the active
+  // markdown editor if the bound one was closed.
+  _findBoundEditor() {
+    if (this.boundUri) {
+      const match = vscode.window.visibleTextEditors.find(
+        (ed) => ed.document.uri.toString() === this.boundUri
+      );
+      if (match) return match;
+    }
+    const active = vscode.window.activeTextEditor;
+    return active && active.document.languageId === 'markdown' ? active : undefined;
   }
 
   update(content) {
@@ -214,6 +251,11 @@ class PreviewPanel {
   <script src="${u('prism/prism-python.min.js')}"></script>
   <script src="${u('prism/prism-java.min.js')}"></script>
   <script src="${u('prism/prism-pascal.min.js')}"></script>
+  <script src="${u('prism/prism-bash.min.js')}"></script>
+  <script src="${u('prism/prism-rust.min.js')}"></script>
+  <script src="${u('prism/prism-go.min.js')}"></script>
+  <script src="${u('prism/prism-json.min.js')}"></script>
+  <script src="${u('prism/prism-latex.min.js')}"></script>
   <script src="${u('luogu-parser.js')}"></script>
   <script src="${u('preview.js')}"></script>
 </body>
@@ -271,6 +313,9 @@ function activate(context) {
       const preview = PreviewPanel.createOrShow(context);
       const editor = vscode.window.activeTextEditor;
       if (editor && editor.document.languageId === 'markdown') {
+        // Bind the preview to THIS document; later edits to other markdown
+        // files must not push themselves into this preview.
+        preview.boundUri = editor.document.uri.toString();
         preview.update(editor.document.getText());
       }
     })
@@ -286,26 +331,36 @@ function activate(context) {
   // Text changes -> update preview + re-sync scroll
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document.languageId === 'markdown' && PreviewPanel.instance) {
-        PreviewPanel.instance.update(e.document.getText());
-        const editor = vscode.window.activeTextEditor;
-        if (editor && editor.document === e.document) {
-          setTimeout(() => doScrollSync(editor), 150);
-        }
+      const preview = PreviewPanel.instance;
+      if (!preview || e.document.languageId !== 'markdown') return;
+      // Respect the luogu-editor.autoSync setting (was declared in package.json
+      // but never read by code — setting it to false did nothing).
+      if (!vscode.workspace.getConfiguration('luogu-editor').get('autoSync', true)) return;
+      // Only refresh for the document the preview actually shows.
+      if (preview.boundUri && e.document.uri.toString() !== preview.boundUri) return;
+      if (!preview.boundUri) preview.boundUri = e.document.uri.toString();
+      preview.update(e.document.getText());
+      const editor = vscode.window.activeTextEditor;
+      if (editor && editor.document === e.document) {
+        setTimeout(() => doScrollSync(editor), 150);
       }
     })
   );
 
-  // Active editor change -> update preview
+  // Active editor change -> rebind preview to the newly shown document
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (editor && editor.document.languageId === 'markdown' && PreviewPanel.instance) {
+        PreviewPanel.instance.boundUri = editor.document.uri.toString();
         PreviewPanel.instance.update(editor.document.getText());
       }
     })
   );
 
-  // Editor scroll -> preview scroll
+  // Editor scroll -> preview scroll.
+  // NOTE: the selection-change listener that used to live here was removed —
+  // merely moving the cursor re-scrolled the preview even though the visible
+  // range had not changed.
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
@@ -315,28 +370,18 @@ function activate(context) {
     })
   );
 
-  // Cursor movement -> also sync scroll (backup trigger)
-  context.subscriptions.push(
-    vscode.window.onDidChangeTextEditorSelection((e) => {
-      if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 16);
-      }
-    })
-  );
+  // Theme state. HighContrast is a DARK theme (kind 3); HighContrastLight is light
+  // (kind 4) — the old strict === Dark check rendered HighContrast users in light.
+  const isDarkKind = (kind) =>
+    kind === vscode.ColorThemeKind.Dark || kind === vscode.ColorThemeKind.HighContrast;
+  let currentTheme = isDarkKind(vscode.window.activeColorTheme.kind) ? 'dark' : 'light';
+  // The panel picks this up in its 'ready' handshake (no monkey-patching).
+  PreviewPanel.initialTheme = currentTheme;
 
-  // Theme toggle
-  let currentTheme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
-  // Send initial theme to preview when it opens
-  const origCreateOrShow = PreviewPanel.createOrShow;
-  PreviewPanel.createOrShow = function(ctx) {
-    const p = origCreateOrShow.call(this, ctx);
-    p.setTheme(currentTheme);
-    return p;
-  };
   context.subscriptions.push(
     vscode.commands.registerCommand('luogu-editor.toggleTheme', () => {
       currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+      PreviewPanel.initialTheme = currentTheme;
       if (PreviewPanel.instance) PreviewPanel.instance.setTheme(currentTheme);
       vscode.window.showInformationMessage(`预览主题: ${currentTheme === 'light' ? '亮色' : '暗色'}`);
     })
@@ -344,7 +389,8 @@ function activate(context) {
   // Follow VSCode theme changes automatically
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme((theme) => {
-      currentTheme = theme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
+      currentTheme = isDarkKind(theme.kind) ? 'dark' : 'light';
+      PreviewPanel.initialTheme = currentTheme;
       if (PreviewPanel.instance) PreviewPanel.instance.setTheme(currentTheme);
     })
   );
@@ -362,7 +408,11 @@ function activate(context) {
   reg('luogu-editor.insertInlineCode', () => wrapSelectionOrInsert('`', '`', 'code'));
   reg('luogu-editor.insertCodeBlock', async () => {
     const lang = await vscode.window.showQuickPick(['cpp','c','python','java','pascal','rust','go','plain'], { placeHolder: '选择语言' });
-    if (lang) insertTextAtCursor(`\n\`\`\`${lang} line-numbers\n// code\n\`\`\`\n`);
+    if (lang) {
+      // Comment marker must match the language — `// code` is a syntax error in Python.
+      const comment = lang === 'python' ? '# code' : (lang === 'plain' ? 'code' : '// code');
+      insertTextAtCursor(`\n\`\`\`${lang} line-numbers\n${comment}\n\`\`\`\n`);
+    }
   });
   reg('luogu-editor.insertQuote', () => insertTextAtCursor('\n> 引用内容\n'));
   reg('luogu-editor.insertMathInline', () => wrapSelectionOrInsert('$', '$', 'x'));
@@ -412,19 +462,23 @@ function activate(context) {
 
 async function insertCallout(type) {
   const title = await vscode.window.showInputBox({ prompt: `${type} 标题`, value: type });
+  if (title === undefined) return; // Esc — abort instead of inserting anyway
   const pick = await vscode.window.showQuickPick([{label:'默认折叠',value:false},{label:'默认展开',value:true}], { placeHolder: '默认状态' });
-  const openStr = pick && pick.value ? '{open}' : '';
+  if (pick === undefined) return;  // Esc — abort
+  const openStr = pick.value ? '{open}' : '';
   insertTextAtCursor(`\n::::${type}[${title || type}]${openStr}\n内容\n::::\n`);
 }
 
 async function insertTemplateFromFile(key) {
+  // Real template library lives in media/luogu-templates.js (loaded at the top of
+  // this file); these are only emergency fallbacks if that file is missing.
   const fallbacks = {
     demo: '# 演示\n\n**粗体** *斜体* `代码` $LaTeX$\n\n$$\n\\sum_{i=1}^n i = \\frac{n(n+1)}{2}\n$$\n\n```cpp line-numbers\n#include <iostream>\nint main() { return 0; }\n```\n',
     solution: '# 题解\n\n## 思路\n\n## 代码\n\n::::info[代码]{open}\n```cpp line-numbers\n#include <iostream>\nint main() { return 0; }\n```\n::::\n\n## 复杂度\n\n时间 $\\mathcal{O}(n)$\n',
     problem: '# 题目\n\n## 描述\n\n## 输入格式\n\n## 输出格式\n\n## 数据范围\n\n$1 \\le n \\le 10^5$\n',
     article: '# 文章\n\n:::epigraph[——作者]\n引言\n:::\n\n## 正文\n',
   };
-  const tpl = fallbacks[key] || '# 新文档\n';
+  const tpl = LuoguTemplates[key] || fallbacks[key] || '# 新文档\n';
   const ok = await vscode.window.showWarningMessage('替换全部内容?', '确定', '取消');
   if (ok === '确定') { replaceAllContent(tpl); vscode.window.showInformationMessage('模板已应用'); }
 }
@@ -437,35 +491,74 @@ function fixSpacing(text) {
   text = text.replace(/\$[^\$\n]+?\$/g, (m) => { const k = `\x00C${idx++}\x00`; blocks.push({k,v:m}); return k; });
   text = text.replace(/([\u4e00-\u9fff])([A-Za-z0-9])/g, '$1 $2');
   text = text.replace(/([A-Za-z0-9])([\u4e00-\u9fff])/g, '$1 $2');
-  text = text.replace(/([\u4e00-\u9fff])(\x00C)/g, '$1 $2');
-  text = text.replace(/(\x00C\d*)([\u4e00-\u9fff])/g, '$1 $2');
-  text = text.replace(/  +/g, ' ');
-  for (const b of blocks) text = text.replace(b.k, b.v);
+  // A placeholder token is \x00 C <digits> \x00. The old rule omitted the TRAILING
+  // \x00, so it could never match and no space was added AFTER a placeholder.
+  text = text.replace(/([\u4e00-\u9fff])(\x00C\d*\x00)/g, '$1 $2');
+  text = text.replace(/(\x00C\d*\x00)([\u4e00-\u9fff])/g, '$1 $2');
+  // Collapse 2+ space runs to one — but NEVER touch end-of-line whitespace: two
+  // trailing spaces are Luogu's hard line break; the old /  +/g collapsed them too,
+  // silently deleting every hard break in the document.
+  text = text.replace(/ {2,}/gm, (run, offset, str) => {
+    const next = str[offset + run.length];
+    return (next === '\n' || next === '\r' || next === undefined) ? run : ' ';
+  });
+  // Function-callback replacement: a plain string second argument interprets $&,
+  // $', $` and $$ inside the ORIGINAL code/math as replacement patterns and
+  // corrupts the user's code (bash/perl/sed snippets are full of them).
+  for (const b of blocks) text = text.replace(b.k, () => b.v);
   return text;
 }
 
 function deactivate() {}
 
 /**
- * Toggle a task checkbox in the markdown source by task index
+ * Toggle a task checkbox in the markdown source by task index.
+ *
+ * The index must match the renderer's counting exactly, otherwise a click flips
+ * the WRONG line. Two mismatches are fixed here:
+ *  1. The renderer treats fenced code blocks as opaque — `- [ ]` examples inside
+ *     a fence are NOT tasks. The old scan matched them (raw text), shifting every
+ *     later index by the number of fenced examples.
+ *  2. The renderer strips blockquote `>` prefixes before parsing, so `> - [ ]`
+ *     counts as a task there. The old scan required the marker at line start and
+ *     skipped those lines, shifting every earlier index.
  */
 async function toggleTaskInEditor(editor, taskIndex, checked) {
   const doc = editor.document;
   const text = doc.getText();
   const lines = text.split('\n');
-  
+
   let currentIndex = 0;
+  let inFence = false;
+  let fenceChar = '';
+  let fenceLen = 0;
+
   for (let lineNum = 0; lineNum < lines.length; lineNum++) {
     const line = lines[lineNum];
-    // Match task list items: - [ ] or - [x] or * [ ] or * [x] or + [ ] or + [x]
-    const match = line.match(/^(\s*[-*+]\s+)\[([ xX])\](.*)$/);
+
+    // Fence tracking — skip everything inside ``` / ~~~ blocks.
+    const fenceMatch = line.match(/^\s*([`~]{3,})/);
+    if (!inFence && fenceMatch) {
+      inFence = true;
+      fenceChar = fenceMatch[1][0];
+      fenceLen = fenceMatch[1].length;
+      continue;
+    }
+    if (inFence) {
+      if (fenceMatch && fenceMatch[1][0] === fenceChar && fenceMatch[1].length >= fenceLen) {
+        inFence = false;
+      }
+      continue;
+    }
+
+    // Task list items, allowing any depth of blockquote prefix (renderer sees the
+    // same line after stripping those) and both bullet / ordered markers.
+    const match = line.match(/^((?:\s*>\s?)*)(\s*(?:[-*+]|\d+\.)\s+)\[([ xX])\](.*)$/);
     if (match) {
       if (currentIndex === taskIndex) {
-        const prefix = match[1];
-        const suffix = match[3];
         const newMark = checked ? 'x' : ' ';
-        const newLine = `${prefix}[${newMark}]${suffix}`;
-        
+        const newLine = `${match[1]}${match[2]}[${newMark}]${match[4]}`;
+
         const lineRange = doc.lineAt(lineNum).range;
         await editor.edit(editBuilder => {
           editBuilder.replace(lineRange, newLine);

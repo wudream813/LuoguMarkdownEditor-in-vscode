@@ -1,5 +1,5 @@
 /**
- * Preview webview script for Luogu Markdown Editor v1.0.8
+ * Preview webview script for Luogu Markdown Editor v1.0.12
  */
 (function () {
   'use strict';
@@ -17,8 +17,24 @@
   var vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
   var scrollSyncLock = false;
 
-  // Track loaded Bilibili videos by their src URL
-  var loadedBilibiliVideos = new Set();
+  // Loaded Bilibili videos are kept as LIVE <iframe> elements keyed by src URL.
+  // Every edit triggers a full innerHTML re-render, which used to DESTROY any
+  // playing video and reload it (resetting progress) on every keystroke. Now,
+  // before each re-render the iframes are moved to a hidden parking container —
+  // re-appending an element that never left the document does NOT reload it, so
+  // playback position and buffering survive.
+  var loadedBilibiliVideos = new Map();
+  var videoParking = null;
+
+  function getVideoParking() {
+    if (!videoParking) {
+      videoParking = document.createElement('div');
+      videoParking.id = 'bilibili-video-parking';
+      videoParking.style.display = 'none';
+      document.body.appendChild(videoParking);
+    }
+    return videoParking;
+  }
 
   // ── Global functions for inline onclick handlers ──
 
@@ -42,24 +58,27 @@
   window.loadBilibiliPlayer = function (btn) {
     var src = btn.getAttribute('data-src');
     if (!src) return;
-    
-    // Track this video as loaded
-    loadedBilibiliVideos.add(src);
-    
-    var iframe = document.createElement('iframe');
-    iframe.setAttribute('src', src);
-    iframe.setAttribute('scrolling', 'no');
-    iframe.setAttribute('frameborder', 'no');
-    iframe.setAttribute('framespacing', '0');
-    iframe.setAttribute('allowfullscreen', 'true');
-    iframe.setAttribute('referrerpolicy', 'no-referrer');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
-    
-    // Find the wrapper and replace button with iframe
+
+    // Reuse the existing live iframe for this src if we have one — creating a new
+    // element would start the video over.
+    var iframe = loadedBilibiliVideos.get(src);
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.setAttribute('src', src);
+      iframe.setAttribute('scrolling', 'no');
+      iframe.setAttribute('frameborder', 'no');
+      iframe.setAttribute('framespacing', '0');
+      iframe.setAttribute('allowfullscreen', 'true');
+      iframe.setAttribute('referrerpolicy', 'no-referrer');
+      iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
+      loadedBilibiliVideos.set(src, iframe);
+    }
+
+    // Find the wrapper and replace the facade button with the iframe
     var wrapper = btn.closest('.luogu-bilibili-player-wrapper');
     if (wrapper) {
       wrapper.innerHTML = '';
-      wrapper.appendChild(iframe);
+      wrapper.appendChild(iframe);   // move, not recreate — playback keeps running
     } else {
       btn.replaceWith(iframe);
     }
@@ -68,7 +87,7 @@
   window.toggleTaskCheckbox = function (checkbox) {
     var taskIndex = checkbox.getAttribute('data-task-index');
     var isChecked = checkbox.checked;
-    
+
     if (vscodeApi && taskIndex !== null) {
       vscodeApi.postMessage({
         type: 'toggle-task',
@@ -81,36 +100,63 @@
   // ── Callout state preservation ──
 
   function saveCalloutStates() {
+    // Key by ORDINAL (position among callouts), not data-src-line: typing above a
+    // callout shifts every line number, so a line-keyed restore applied each
+    // saved open/closed state to the WRONG callout. Ordinal order is stable under
+    // line edits and only shifts if a callout itself is inserted/removed.
     var states = {};
     if (!previewEl) return states;
+    var idx = 0;
     previewEl.querySelectorAll('details.luogu-callout').forEach(function (d) {
-      var line = d.getAttribute('data-src-line');
-      if (line !== null) states[line] = d.hasAttribute('open');
+      states[idx++] = d.hasAttribute('open');
     });
     return states;
   }
 
   function restoreCalloutStates(states) {
     if (!previewEl) return;
+    var idx = 0;
     previewEl.querySelectorAll('details.luogu-callout').forEach(function (d) {
-      var line = d.getAttribute('data-src-line');
-      if (line !== null && states.hasOwnProperty(line)) {
-        if (states[line]) d.setAttribute('open', '');
+      var key = idx++;
+      if (Object.prototype.hasOwnProperty.call(states, key)) {
+        if (states[key]) d.setAttribute('open', '');
         else d.removeAttribute('open');
       }
     });
   }
 
-  // ── Bilibili auto-load for previously loaded videos ──
+  // ── Bilibili iframe preservation across re-renders ──
+
+  function parkBilibiliVideos() {
+    if (loadedBilibiliVideos.size === 0) return;
+    var parking = getVideoParking();
+    loadedBilibiliVideos.forEach(function (iframe) {
+      if (iframe.isConnected && iframe.parentNode !== parking) {
+        parking.appendChild(iframe);   // keeps the element (and playback) alive
+      }
+    });
+  }
 
   function restoreBilibiliVideos() {
-    if (!previewEl || loadedBilibiliVideos.size === 0) return;
+    if (!previewEl) return;
     previewEl.querySelectorAll('.luogu-bilibili-facade').forEach(function (btn) {
       var src = btn.getAttribute('data-src');
       if (src && loadedBilibiliVideos.has(src)) {
-        // Auto-load this video
+        // Move the SAME iframe back into place — no reload.
         window.loadBilibiliPlayer(btn);
       }
+    });
+    // Prune videos whose markdown was deleted: after a full restore any iframe
+    // still parked has no facade waiting for it in the document.
+    var parking = getVideoParking();
+    var stale = [];
+    loadedBilibiliVideos.forEach(function (iframe, src) {
+      if (iframe.parentNode === parking) stale.push(src);
+    });
+    stale.forEach(function (src) {
+      var iframe = loadedBilibiliVideos.get(src);
+      if (iframe.remove) iframe.remove();
+      loadedBilibiliVideos.delete(src);
     });
   }
 
@@ -119,13 +165,14 @@
   function render(markdown) {
     if (!previewEl || !parser) return;
     var saved = saveCalloutStates();
+    parkBilibiliVideos();
     previewEl.innerHTML = parser.render(markdown || '');
     restoreCalloutStates(saved);
     restoreBilibiliVideos();
   }
 
   // ── Scroll sync ──
-  
+
   var isSyncing = false;
   var scrollTimeout = null;
 
@@ -146,16 +193,16 @@
 
     // The scrollable container is document.body (see preview.css)
     var scrollContainer = document.body;
-    
+
     // Calculate positions for each anchor
     var points = anchors.map(function (a) {
       var rect = a.el.getBoundingClientRect();
-      return { 
-        line: a.line, 
-        top: rect.top + scrollContainer.scrollTop - scrollContainer.getBoundingClientRect().top 
+      return {
+        line: a.line,
+        top: rect.top + scrollContainer.scrollTop - scrollContainer.getBoundingClientRect().top
       };
     });
-    
+
     // Add endpoint
     points.push({ line: 999999, top: scrollContainer.scrollHeight });
 
