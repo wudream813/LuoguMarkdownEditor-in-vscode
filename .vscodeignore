@@ -1,0 +1,8 @@
+.git
+.gitignore
+.github
+.vscode
+node_modules
+test/
+*.map
+*.vsix

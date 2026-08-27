@@ -1,0 +1,159 @@
+{
+  "name": "luogu-markdown-editor",
+  "displayName": "Luogu Markdown Editor",
+  "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。支持洛谷全部扩展语法、KaTeX 数学公式、代码高亮、折叠框、表格合并等。",
+  "version": "1.0.0",
+  "publisher": "wudream813",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization",
+    "Formatters"
+  ],
+  "keywords": [
+    "markdown",
+    "luogu",
+    "katex",
+    "latex",
+    "math",
+    "preview",
+    "editor",
+    "洛谷"
+  ],
+  "icon": "media/icon.png",
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "luogu-editor.openPreview",
+        "title": "洛谷 Markdown: 打开实时预览编辑器",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "luogu-editor.openSideBySide",
+        "title": "洛谷 Markdown: 在侧边打开预览",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "luogu-editor.copyMarkdown",
+        "title": "洛谷 Markdown: 复制 Markdown 源码"
+      },
+      {
+        "command": "luogu-editor.exportHTML",
+        "title": "洛谷 Markdown: 导出独立 HTML 文件"
+      },
+      {
+        "command": "luogu-editor.autoFixSpacing",
+        "title": "洛谷 Markdown: 一键排版规范修复"
+      },
+      {
+        "command": "luogu-editor.insertTemplate",
+        "title": "洛谷 Markdown: 插入洛谷模板"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "luogu-editor.openPreview",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "luogu-editor.openSideBySide",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "luogu-editor.openSideBySide",
+          "when": "editorLangId == markdown",
+          "group": "luogu"
+        },
+        {
+          "command": "luogu-editor.copyMarkdown",
+          "when": "editorLangId == markdown",
+          "group": "luogu"
+        },
+        {
+          "command": "luogu-editor.autoFixSpacing",
+          "when": "editorLangId == markdown",
+          "group": "luogu"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "luogu-editor.openPreview",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "luogu-editor.openSideBySide",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "luogu-editor.copyMarkdown",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "luogu-editor.exportHTML",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "luogu-editor.autoFixSpacing",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "luogu-editor.insertTemplate",
+          "when": "editorLangId == markdown"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "luogu-editor.preview",
+        "displayName": "洛谷 Markdown 预览",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "configuration": {
+      "title": "洛谷 Markdown 编辑器",
+      "properties": {
+        "luogu-editor.theme": {
+          "type": "string",
+          "enum": ["light", "dark"],
+          "default": "light",
+          "description": "预览主题（亮色/暗色）"
+        },
+        "luogu-editor.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "编辑器内容变化时自动同步到预览面板"
+        },
+        "luogu-editor.autoFixSpacing": {
+          "type": "boolean",
+          "default": false,
+          "description": "保存时自动修复中英文空格排版"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "echo 'Ready to publish'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wudream813/LuoguMarkdownEditor-in-vscode"
+  },
+  "license": "MIT"
+}

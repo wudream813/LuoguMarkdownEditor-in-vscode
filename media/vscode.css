@@ -1,0 +1,138 @@
+/*
+ * VSCode-specific style overrides for the Luogu Markdown Editor
+ * These styles adapt the editor UI to better integrate with VSCode's look & feel.
+ */
+
+/* Use VSCode's CSS variables when available for seamless integration */
+:root {
+  --vscode-editor-bg: var(--vscode-editor-background, #1e1e1e);
+  --vscode-editor-fg: var(--vscode-editor-foreground, #d4d4d4);
+  --vscode-sidebar-bg: var(--vscode-sideBar-background, #252526);
+  --vscode-border: var(--vscode-panel-border, #404040);
+  --vscode-button-bg: var(--vscode-button-background, #0e639c);
+  --vscode-button-fg: var(--vscode-button-foreground, #ffffff);
+  --vscode-button-hover: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+/* Ensure the editor takes the full viewport in VSCode webview */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Smoother integration with VSCode's title bar area */
+.app-header {
+  border-bottom: 1px solid var(--vscode-border, var(--border-color, #e2e8f0));
+}
+
+/* Status bar at the bottom integrates with VSCode's status bar style */
+.app-statusbar {
+  border-top: 1px solid var(--vscode-border, var(--border-color, #e2e8f0));
+  font-size: 11px;
+}
+
+/* Better button styling for VSCode context */
+.btn-primary {
+  background: var(--vscode-button-bg, var(--luogu-blue, #3498db));
+  color: var(--vscode-button-fg, #ffffff);
+  border: none;
+}
+
+.btn-primary:hover {
+  background: var(--vscode-button-hover, var(--luogu-blue-dark, #2980b9));
+}
+
+/* VSCode-like scrollbar in the webview */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(121, 121, 121, 0.4);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(121, 121, 121, 0.7);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Focus ring matching VSCode */
+*:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -1px;
+}
+
+/* VSCode-like tooltip feel for tool buttons */
+.tool-btn:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
+}
+
+/* Ensure the main workspace fills available space */
+.main-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Improve the doc name input to look native in VSCode */
+.doc-name-input {
+  background: var(--vscode-input-background, rgba(0,0,0,0.05));
+  color: var(--vscode-input-foreground, inherit);
+  border: 1px solid var(--vscode-input-border, transparent);
+}
+
+/* Dark theme refinements when using VSCode dark theme */
+[data-theme="dark"] {
+  --vscode-border: #404040;
+}
+
+/* Toast notifications positioned correctly in the webview */
+.toast-container {
+  position: fixed;
+  bottom: 48px;
+  right: 16px;
+  z-index: 10000;
+}
+
+/* Modal backdrop for VSCode webview */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Responsive adjustments for narrow webview panels */
+@media (max-width: 600px) {
+  .app-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .header-center {
+    order: 3;
+    width: 100%;
+  }
+  .toolbar-container {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .toolbar-group {
+    flex-shrink: 0;
+  }
+}
