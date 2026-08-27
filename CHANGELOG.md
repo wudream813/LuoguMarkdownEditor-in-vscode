@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.7] - 2026-08-27
+
+### 修复
+
+- **滚动同步**：webview 加载完成后发送 `ready` 消息通知扩展主机，扩展主机收到后才开始发送滚动位置；使用 `requestAnimationFrame` 确保 DOM 渲染完毕后再滚动；增加 `scrollSyncLock` 防止反馈循环
+- **Bilibili 黑屏**：移除 iframe 的 `sandbox` 属性（Bilibili 播放器需要同源访问其 API），添加 `allow="autoplay; fullscreen"`
+- **主题切换**：新增 `luogu-editor.toggleTheme` 命令和侧边栏入口，通过 `set-theme` 消息切换预览面板的 `data-theme`
+
 ## [1.0.6] - 2026-08-27
 
 ### 修复
