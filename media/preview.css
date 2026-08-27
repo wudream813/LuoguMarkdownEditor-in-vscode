@@ -1,0 +1,194 @@
+/*
+ * Preview-only styles for Luogu Markdown Editor v1.0.1
+ * This stylesheet adapts the Luogu styles for a preview-only webview panel.
+ */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  background: var(--vscode-editor-background, #ffffff);
+  color: var(--vscode-editor-foreground, #1e1e1e);
+  overflow-x: hidden;
+}
+
+/* Use VSCode's background color for seamless integration */
+:root {
+  --bg-primary: var(--vscode-editor-background, #ffffff);
+  --bg-secondary: var(--vscode-sideBar-background, #f3f3f3);
+  --text-primary: var(--vscode-editor-foreground, #1e1e1e);
+  --text-secondary: var(--vscode-descriptionForeground, #666666);
+  --text-muted: var(--vscode-disabledForeground, #999999);
+  --border-color: var(--vscode-panel-border, #e0e0e0);
+  --luogu-blue: var(--vscode-textLink-foreground, #3498db);
+  --luogu-blue-dark: #2980b9;
+  --luogu-green: #2ecc71;
+  --luogu-orange: #e67e22;
+}
+
+/* Dark theme overrides */
+[data-theme="dark"],
+body.vscode-dark,
+body.vscode-high-contrast {
+  --bg-primary: var(--vscode-editor-background, #1e1e1e);
+  --bg-secondary: var(--vscode-sideBar-background, #252526);
+  --text-primary: var(--vscode-editor-foreground, #d4d4d4);
+  --text-secondary: var(--vscode-descriptionForeground, #aaaaaa);
+  --text-muted: var(--vscode-disabledForeground, #666666);
+  --border-color: var(--vscode-panel-border, #404040);
+}
+
+/* Preview content container */
+.preview-content,
+.luogu-preview-root {
+  max-width: 100%;
+  padding: 20px 24px 60px;
+  box-sizing: border-box;
+  line-height: 1.8;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Override Luogu styles for VSCode context */
+.luogu-preview-root h1,
+.luogu-preview-root h2,
+.luogu-preview-root h3,
+.luogu-preview-root h4,
+.luogu-preview-root h5,
+.luogu-preview-root h6 {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-color);
+}
+
+.luogu-preview-root p {
+  color: var(--text-primary);
+}
+
+.luogu-preview-root a {
+  color: var(--vscode-textLink-foreground, #3498db);
+}
+
+.luogu-preview-root a:hover {
+  color: var(--vscode-textLink-activeForeground, #2980b9);
+}
+
+.luogu-preview-root blockquote,
+.luogu-preview-root .luogu-blockquote {
+  border-left-color: var(--luogu-blue);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.luogu-preview-root code,
+.luogu-preview-root .luogu-inline-code {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.luogu-preview-root pre,
+.luogu-preview-root .luogu-code-block-wrapper {
+  border: 1px solid var(--border-color);
+}
+
+.luogu-preview-root table,
+.luogu-preview-root .luogu-table {
+  border-color: var(--border-color);
+}
+
+.luogu-preview-root th {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.luogu-preview-root td {
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.luogu-preview-root hr,
+.luogu-preview-root .luogu-hr {
+  background: var(--border-color);
+  border: none;
+  height: 1px;
+}
+
+.luogu-preview-root img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+/* Callout styles */
+.luogu-preview-root .luogu-callout {
+  border-color: var(--border-color);
+}
+
+/* Epigraph */
+.luogu-preview-root .luogu-epigraph {
+  background: var(--bg-secondary);
+  border-left-color: var(--luogu-blue);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(100, 100, 100, 0.4));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Task list checkboxes (non-interactive in preview) */
+.luogu-preview-root .luogu-task-checkbox {
+  pointer-events: none;
+}
+
+/* Toast container (for any notifications) */
+.toast-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10000;
+}
+
+/* Bilibili facade button */
+.luogu-preview-root .luogu-bilibili-facade {
+  background: var(--bg-secondary);
+}
+
+/* Responsive: on narrow panels, reduce padding */
+@media (max-width: 500px) {
+  .preview-content,
+  .luogu-preview-root {
+    padding: 12px 14px 40px;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  .luogu-callout {
+    display: block !important;
+  }
+  .luogu-callout-content {
+    display: block !important;
+  }
+  .luogu-callout-arrow {
+    display: none !important;
+  }
+}

@@ -1,8 +1,8 @@
 {
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
-  "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。支持洛谷全部扩展语法、KaTeX 数学公式、代码高亮、折叠框、表格合并等。",
-  "version": "1.0.0",
+  "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
+  "version": "1.0.1",
   "publisher": "wudream813",
   "engines": {
     "vscode": "^1.75.0"
@@ -23,35 +23,167 @@
     "洛谷"
   ],
   "icon": "media/icon.png",
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
   "main": "./extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "luogu-editor",
+          "title": "洛谷 Markdown",
+          "icon": "media/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "luogu-editor": [
+        {
+          "id": "luogu-editor.toolbox",
+          "name": "格式工具箱",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "id": "luogu-editor.templates",
+          "name": "模板与工具",
+          "when": "editorLangId == markdown"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "luogu-editor.openPreview",
-        "title": "洛谷 Markdown: 打开实时预览编辑器",
-        "icon": "$(preview)"
+        "title": "洛谷 Markdown: 打开实时预览",
+        "icon": "$(open-preview)"
       },
       {
-        "command": "luogu-editor.openSideBySide",
-        "title": "洛谷 Markdown: 在侧边打开预览",
-        "icon": "$(open-preview)"
+        "command": "luogu-editor.closePreview",
+        "title": "洛谷 Markdown: 关闭预览"
       },
       {
         "command": "luogu-editor.copyMarkdown",
         "title": "洛谷 Markdown: 复制 Markdown 源码"
       },
       {
-        "command": "luogu-editor.exportHTML",
-        "title": "洛谷 Markdown: 导出独立 HTML 文件"
-      },
-      {
         "command": "luogu-editor.autoFixSpacing",
         "title": "洛谷 Markdown: 一键排版规范修复"
       },
       {
-        "command": "luogu-editor.insertTemplate",
-        "title": "洛谷 Markdown: 插入洛谷模板"
+        "command": "luogu-editor.insertBold",
+        "title": "洛谷: 加粗"
+      },
+      {
+        "command": "luogu-editor.insertItalic",
+        "title": "洛谷: 斜体"
+      },
+      {
+        "command": "luogu-editor.insertStrikethrough",
+        "title": "洛谷: 删除线"
+      },
+      {
+        "command": "luogu-editor.insertHeading1",
+        "title": "洛谷: H1 标题"
+      },
+      {
+        "command": "luogu-editor.insertHeading2",
+        "title": "洛谷: H2 标题"
+      },
+      {
+        "command": "luogu-editor.insertHeading3",
+        "title": "洛谷: H3 标题"
+      },
+      {
+        "command": "luogu-editor.insertHeading4",
+        "title": "洛谷: H4 标题"
+      },
+      {
+        "command": "luogu-editor.insertInlineCode",
+        "title": "洛谷: 行内代码"
+      },
+      {
+        "command": "luogu-editor.insertCodeBlock",
+        "title": "洛谷: 代码块"
+      },
+      {
+        "command": "luogu-editor.insertQuote",
+        "title": "洛谷: 引用"
+      },
+      {
+        "command": "luogu-editor.insertMathInline",
+        "title": "洛谷: 行内公式"
+      },
+      {
+        "command": "luogu-editor.insertMathBlock",
+        "title": "洛谷: 行间公式"
+      },
+      {
+        "command": "luogu-editor.insertCalloutInfo",
+        "title": "洛谷: info 折叠框"
+      },
+      {
+        "command": "luogu-editor.insertCalloutSuccess",
+        "title": "洛谷: success 折叠框"
+      },
+      {
+        "command": "luogu-editor.insertCalloutWarning",
+        "title": "洛谷: warning 折叠框"
+      },
+      {
+        "command": "luogu-editor.insertCalloutError",
+        "title": "洛谷: error 折叠框"
+      },
+      {
+        "command": "luogu-editor.insertTable",
+        "title": "洛谷: 插入表格"
+      },
+      {
+        "command": "luogu-editor.insertEpigraph",
+        "title": "洛谷: 引言"
+      },
+      {
+        "command": "luogu-editor.insertAlignCenter",
+        "title": "洛谷: 居中"
+      },
+      {
+        "command": "luogu-editor.insertAlignRight",
+        "title": "洛谷: 居右"
+      },
+      {
+        "command": "luogu-editor.insertBilibili",
+        "title": "洛谷: Bilibili 视频"
+      },
+      {
+        "command": "luogu-editor.insertLink",
+        "title": "洛谷: 链接"
+      },
+      {
+        "command": "luogu-editor.insertImage",
+        "title": "洛谷: 图片"
+      },
+      {
+        "command": "luogu-editor.insertTaskList",
+        "title": "洛谷: 任务列表"
+      },
+      {
+        "command": "luogu-editor.insertHR",
+        "title": "洛谷: 分割线"
+      },
+      {
+        "command": "luogu-editor.insertTemplateDemo",
+        "title": "洛谷: 全特性演示模板"
+      },
+      {
+        "command": "luogu-editor.insertTemplateSolution",
+        "title": "洛谷: 题解模板"
+      },
+      {
+        "command": "luogu-editor.insertTemplateProblem",
+        "title": "洛谷: 题面模板"
+      },
+      {
+        "command": "luogu-editor.insertTemplateArticle",
+        "title": "洛谷: 学术文章模板"
       }
     ],
     "menus": {
@@ -60,90 +192,42 @@
           "command": "luogu-editor.openPreview",
           "when": "editorLangId == markdown",
           "group": "navigation"
-        },
-        {
-          "command": "luogu-editor.openSideBySide",
-          "when": "editorLangId == markdown",
-          "group": "navigation"
         }
       ],
       "editor/context": [
         {
-          "command": "luogu-editor.openSideBySide",
-          "when": "editorLangId == markdown",
-          "group": "luogu"
-        },
-        {
-          "command": "luogu-editor.copyMarkdown",
-          "when": "editorLangId == markdown",
-          "group": "luogu"
-        },
-        {
-          "command": "luogu-editor.autoFixSpacing",
-          "when": "editorLangId == markdown",
-          "group": "luogu"
-        }
-      ],
-      "commandPalette": [
-        {
           "command": "luogu-editor.openPreview",
-          "when": "editorLangId == markdown"
-        },
-        {
-          "command": "luogu-editor.openSideBySide",
-          "when": "editorLangId == markdown"
+          "when": "editorLangId == markdown",
+          "group": "luogu@1"
         },
         {
           "command": "luogu-editor.copyMarkdown",
-          "when": "editorLangId == markdown"
-        },
-        {
-          "command": "luogu-editor.exportHTML",
-          "when": "editorLangId == markdown"
+          "when": "editorLangId == markdown",
+          "group": "luogu@2"
         },
         {
           "command": "luogu-editor.autoFixSpacing",
-          "when": "editorLangId == markdown"
-        },
-        {
-          "command": "luogu-editor.insertTemplate",
-          "when": "editorLangId == markdown"
+          "when": "editorLangId == markdown",
+          "group": "luogu@3"
         }
       ]
     },
-    "customEditors": [
-      {
-        "viewType": "luogu-editor.preview",
-        "displayName": "洛谷 Markdown 预览",
-        "selector": [
-          {
-            "filenamePattern": "*.md"
-          },
-          {
-            "filenamePattern": "*.markdown"
-          }
-        ],
-        "priority": "option"
-      }
-    ],
     "configuration": {
       "title": "洛谷 Markdown 编辑器",
       "properties": {
         "luogu-editor.theme": {
           "type": "string",
-          "enum": ["light", "dark"],
+          "enum": [
+            "light",
+            "dark"
+          ],
           "default": "light",
           "description": "预览主题（亮色/暗色）"
         },
         "luogu-editor.autoSync": {
           "type": "boolean",
           "default": true,
-          "description": "编辑器内容变化时自动同步到预览面板"
-        },
-        "luogu-editor.autoFixSpacing": {
-          "type": "boolean",
-          "default": false,
-          "description": "保存时自动修复中英文空格排版"
+          "description": "编辑时自动同步预览"
         }
       }
     }
