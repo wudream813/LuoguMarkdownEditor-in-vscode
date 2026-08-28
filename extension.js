@@ -217,10 +217,15 @@ class PreviewPanel {
     this.panel.webview.postMessage({ type: 'scroll-sync', topLine, instant });
   }
 
-  // Echo-guard state for preview→editor sync: the revealRange below fires
+  // Echo-guard for preview→editor sync: the revealRange below fires
   // onDidChangeTextEditorVisibleRanges, which would sync RIGHT BACK into the
-  // preview and fight the user's scroll (quantized snap to the line top).
-  _suppressEchoLine = -1;
+  // preview and fight the user's scroll. The guard must be a PURE TIME WINDOW —
+  // matching by line number (an earlier version) failed under continuous
+  // preview scrolling: relays arrive every ~80ms, each overwriting the expected
+  // echo line, so STALE echoes from earlier reveals never matched, got sent
+  // back into the preview, and rubber-banded it ("滚动回弹"). Echoes land within
+  // a few ms of their reveal; 150ms is safely longer and far shorter than any
+  // human's inter-pane scroll switch.
   _suppressEchoUntil = 0;
 
   _scrollEditorToLine(topLine) {
@@ -234,8 +239,7 @@ class PreviewPanel {
     const line = Math.max(0, Math.min(editor.document.lineCount - 1, Math.floor(topLine)));
     const cur = editor.visibleRanges[0];
     if (cur && cur.start.line === line) return; // already at top; reveal would no-op
-    this._suppressEchoLine = line;
-    this._suppressEchoUntil = Date.now() + 500;
+    this._suppressEchoUntil = Date.now() + 150;
     editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
   }
 
@@ -402,13 +406,11 @@ function activate(context) {
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       const preview = PreviewPanel.instance;
       if (!preview || e.textEditor.document.languageId !== 'markdown') return;
-      // Echo guard: if this visibleRanges change is the one WE just caused by
-      // following a preview scroll, swallow it — syncing it back would fight the
-      // user's preview scroll and snap the preview back to the quantized line top.
-      if (preview._suppressEchoUntil > Date.now() &&
-          e.visibleRanges[0] && e.visibleRanges[0].start.line === preview._suppressEchoLine) {
-        return;
-      }
+      // Echo guard: a visibleRanges change WE caused by following a preview
+      // scroll must not be synced BACK into the preview — that bounce is the
+      // rubber-banding this guard exists to prevent. Pure time window (see the
+      // field comment for the stale-echo race that ruled out line matching).
+      if (preview._suppressEchoUntil > Date.now()) return;
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 16);
     })
