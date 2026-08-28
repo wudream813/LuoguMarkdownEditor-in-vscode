@@ -233,7 +233,7 @@
   // FINAL landing position when the user scrolled right as the preview opened.
   // Messages are always honored now; loop prevention uses precise timestamp
   // suppression on the relay side instead of dropping inbound syncs.
-  function scrollToLine(topLine, instant) {
+  function scrollToLine(topLine, behavior) {
     if (!previewEl) return;
 
     // The scrollable container is document.body (see preview.css)
@@ -259,9 +259,7 @@
 
     if (Math.abs(scrollContainer.scrollTop - want) > 2) {
       noteProgrammaticScroll(want); // starting now, scrolls are machine-made
-      // 'instant' positioning (opening the preview, switching files) must jump —
-      // smooth animation there reads as the preview drifting on its own.
-      scrollContainer.scrollTo({ top: want, behavior: instant ? 'auto' : 'smooth' });
+      scrollContainer.scrollTo({ top: want, behavior: behavior });
     }
   }
 
@@ -294,18 +292,32 @@
   var RELAY_MS = 33;
   var relayTimer = null;
   var relayNextFire = 0;
+  var lastIncomingSync = 0; // last 'scroll-sync' message time (rapid-stream detection)
 
   // Programmatic (sync-made) scrolls must NEVER be relayed — that would create
-  // a loop and yank the editor backwards. Fixed-window suppression failed for
-  // 'smooth' animations longer than the window: their TAIL events leaked through
-  // with mid-animation positions and dragged the editor back. Track the TARGET
-  // instead: suppress until it is reached (±2px), the user visibly takes over
-  // (scroll distance to target starts GROWING), or a 700ms cap expires.
-  var programmaticScroll = null; // { target, until, lastDist }
+  // a loop and yank the editor backwards. Suppression = target tracking + WATCHDOG:
+  // while the smooth animation is running its scroll events keep flowing, each
+  // refreshing the watchdog; suppression holds for the WHOLE animation however
+  // long it takes. 170ms without events = animation done/interrupted → release.
+  // (The previous fixed 700ms cap EXPIRED MID-ANIMATION on long scrolls; the
+  // still-running tail then relayed lag-behind positions and dragged the editor
+  // along with the preview's inertia — "右栏惯性让左栏继续向下".)
+  var programmaticScroll = null; // { target, lastDist, lastEvent }
+  var programmaticWatchdog = null;
+
+  function armProgrammaticWatchdog() {
+    clearTimeout(programmaticWatchdog);
+    programmaticWatchdog = setTimeout(function () {
+      if (programmaticScroll && Date.now() - programmaticScroll.lastEvent >= 150) {
+        programmaticScroll = null; // event stream stopped → animation over
+      }
+    }, 170);
+  }
 
   function noteProgrammaticScroll(target) {
     lastProgrammaticScroll = Date.now();
-    programmaticScroll = { target: target, until: Date.now() + 700, lastDist: 1e9 };
+    programmaticScroll = { target: target, lastDist: 1e9, lastEvent: Date.now() };
+    armProgrammaticWatchdog();
   }
 
   function relayPreviewScroll() {
@@ -320,13 +332,15 @@
     if (programmaticScroll) {
       var dist = Math.abs(document.body.scrollTop - programmaticScroll.target);
       var settled = dist <= 2;
-      var expired = now > programmaticScroll.until;
       var userTookOver = dist > programmaticScroll.lastDist + 40; // growing = human
-      if (settled || expired || userTookOver) {
+      if (settled || userTookOver) {
         programmaticScroll = null;
+        clearTimeout(programmaticWatchdog);
       } else {
         programmaticScroll.lastDist = dist;
-        return; // smooth animation still running — machine-made, stay silent
+        programmaticScroll.lastEvent = now; // animation still running, re-arm watchdog
+        armProgrammaticWatchdog();
+        return; // machine-made, stay silent
       }
     }
     if (now - lastProgrammaticScroll < SUPPRESS_MS) return;
@@ -366,9 +380,18 @@
       case 'update':
         render(msg.content);
         break;
-      case 'scroll-sync':
-        requestAnimationFrame(function () { scrollToLine(msg.topLine, msg.instant); });
+      case 'scroll-sync': {
+        // Rapid-fire syncs mean the user is WHEEL-FLINGING the editor. Chaining
+        // smooth animations then accumulates inertia that outlives the user's
+        // last input — and (pre-watchdog) leaked back as relays that dragged the
+        // editor along. Dense stream → jump instantly; sparse → smooth is nice.
+        var syncNow = Date.now();
+        var rapid = (syncNow - lastIncomingSync) < 90;
+        lastIncomingSync = syncNow;
+        var behavior = msg.instant ? 'auto' : (rapid ? 'auto' : 'smooth');
+        requestAnimationFrame(function () { scrollToLine(msg.topLine, behavior); });
         break;
+      }
       case 'set-theme':
         setTheme(msg.theme);
         break;

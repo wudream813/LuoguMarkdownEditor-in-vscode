@@ -1078,8 +1078,9 @@
       // 3. Images and Bilibili Video Embed (protect as tokens before emphasis)
       // URL group tolerates ONE level of balanced parens (e.g. Wikipedia's
       // ".../Foo_(bar)") — plain (.*?) truncated the URL at the first ')'.
+      // The ALT text likewise tolerates ONE level of balanced brackets.
       const mediaTokens = [];
-      s = s.replace(/!\[(.*?)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, alt, target) => {
+      s = s.replace(/!\[((?:\\.|[^\[\]\\]|\[(?:\\.|[^\[\]\\])*\])*)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, alt, target) => {
         let rawTarget = target.trim();
         let title = '';
         const titleMatch = rawTarget.match(/^(.*?)\s+["'](.*?)["']$/);
@@ -1134,8 +1135,11 @@
         return id;
       });
 
-      // Standard links: [text](url "title") — same balanced-paren URL group as images
-      s = s.replace(/\[([^\]]+)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, label, target) => {
+      // Standard links: [text](url "title") — same balanced-paren URL group as images.
+      // The LABEL tolerates ONE level of balanced brackets ([P3195 [HNOI2008] x](…)
+      // is the standard Luogu problem-title format); plain [^\]]+ failed on it and
+      // the whole link leaked through as literal text.
+      s = s.replace(/\[((?:\\.|[^\[\]\\]|\[(?:\\.|[^\[\]\\])*\])+)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, label, target) => {
         let rawTarget = target.trim();
         let title = '';
         const titleMatch = rawTarget.match(/^(.*?)\s+["'](.*?)["']$/);
