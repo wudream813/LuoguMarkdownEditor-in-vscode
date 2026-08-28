@@ -190,6 +190,7 @@
     // got shorter the browser clamps scrollTop, which fires a 'scroll' event.
     // That must not be relayed to the editor as a user scroll.
     lastProgrammaticScroll = Date.now();
+    programmaticScroll = null; // old sync targets are meaningless on new anchors
   }
 
   // ── Scroll sync ──
@@ -200,7 +201,7 @@
   // sync back here (the extension swallows that echo). Anything within
   // SUPPRESS_MS of a programmatic scroll is considered non-user input.
   var lastProgrammaticScroll = 0;
-  var SUPPRESS_MS = 400; // covers the smooth-scroll animation tail
+  var SUPPRESS_MS = 250; // covers instant-scroll / render-clamp event frames
 
   // Collect [data-src-line] anchors as sorted {line, top-in-document} points,
   // plus a sentinel at the document bottom. Shared by both sync directions.
@@ -257,7 +258,7 @@
     var want = Math.max(0, Math.min(maxScroll, target));
 
     if (Math.abs(scrollContainer.scrollTop - want) > 2) {
-      lastProgrammaticScroll = Date.now(); // starting now, scrolls are machine-made
+      noteProgrammaticScroll(want); // starting now, scrolls are machine-made
       // 'instant' positioning (opening the preview, switching files) must jump —
       // smooth animation there reads as the preview drifting on its own.
       scrollContainer.scrollTo({ top: want, behavior: instant ? 'auto' : 'smooth' });
@@ -286,21 +287,62 @@
     return points[points.length - 2].line;
   }
 
-  // Relay USER scrolls of the preview up to the extension, throttled (~80ms)
-  // with a trailing fire so the final position always lands. Programmatic
-  // scrolls (suppression window) are ignored — relaying them would create a
-  // sync loop between the two panes.
+  // Relay USER scrolls of the preview up to the extension. Throttled to ~30fps
+  // with LEADING + TRAILING fires — leading means the editor starts following
+  // the instant you scroll (v1.0.19/20 waited a flat 80ms first: "左边同步很慢"),
+  // trailing means the final position always lands.
+  var RELAY_MS = 33;
   var relayTimer = null;
+  var relayNextFire = 0;
+
+  // Programmatic (sync-made) scrolls must NEVER be relayed — that would create
+  // a loop and yank the editor backwards. Fixed-window suppression failed for
+  // 'smooth' animations longer than the window: their TAIL events leaked through
+  // with mid-animation positions and dragged the editor back. Track the TARGET
+  // instead: suppress until it is reached (±2px), the user visibly takes over
+  // (scroll distance to target starts GROWING), or a 700ms cap expires.
+  var programmaticScroll = null; // { target, until, lastDist }
+
+  function noteProgrammaticScroll(target) {
+    lastProgrammaticScroll = Date.now();
+    programmaticScroll = { target: target, until: Date.now() + 700, lastDist: 1e9 };
+  }
+
+  function relayPreviewScroll() {
+    if (!vscodeApi) return;
+    var line = lineForScrollTop();
+    if (line === null) return;
+    vscodeApi.postMessage({ type: 'preview-scrolled', topLine: line });
+  }
+
   document.body.addEventListener('scroll', function () {
-    if (Date.now() - lastProgrammaticScroll < SUPPRESS_MS) return;
-    if (relayTimer) return;
-    relayTimer = setTimeout(function () {
-      relayTimer = null;
-      if (Date.now() - lastProgrammaticScroll < SUPPRESS_MS) return;
-      var line = lineForScrollTop();
-      if (line === null || !vscodeApi) return;
-      vscodeApi.postMessage({ type: 'preview-scrolled', topLine: line });
-    }, 80);
+    var now = Date.now();
+    if (programmaticScroll) {
+      var dist = Math.abs(document.body.scrollTop - programmaticScroll.target);
+      var settled = dist <= 2;
+      var expired = now > programmaticScroll.until;
+      var userTookOver = dist > programmaticScroll.lastDist + 40; // growing = human
+      if (settled || expired || userTookOver) {
+        programmaticScroll = null;
+      } else {
+        programmaticScroll.lastDist = dist;
+        return; // smooth animation still running — machine-made, stay silent
+      }
+    }
+    if (now - lastProgrammaticScroll < SUPPRESS_MS) return;
+
+    if (now >= relayNextFire) {
+      relayNextFire = now + RELAY_MS;
+      relayPreviewScroll(); // leading edge — zero added latency
+    } else if (!relayTimer) {
+      relayTimer = setTimeout(function () {
+        relayTimer = null;
+        var t = Date.now();
+        relayNextFire = t + RELAY_MS;
+        if (t - lastProgrammaticScroll < SUPPRESS_MS || programmaticScroll) return;
+        relayPreviewScroll(); // trailing edge — final position lands
+      }, relayNextFire - now);
+    }
   }, { passive: true });
 
   // ── Theme ──
