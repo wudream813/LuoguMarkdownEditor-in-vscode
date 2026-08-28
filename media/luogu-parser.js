@@ -142,11 +142,23 @@
         }
       }
     }
+    queryParams.push('as_wide=1');
     queryParams.push('high_quality=1');
     queryParams.push('danmaku=0');
-    queryParams.push('autoplay=0');
+    // NOTE: deliberately NO autoplay param — the mobile player autoplays whenever
+    // the param is present (even =0); only omitting it disables autoplay.
 
-    const iframeUrl = `https://player.bilibili.com/player.html?${queryParams.join('&')}`;
+    // Use the MOBILE player endpoint instead of the desktop one.
+    //
+    // Why: VSCode's Electron ships WITHOUT the AAC audio decoder (microsoft/vscode
+    // #180780: "MP4 without AAC support"). The desktop player's createPlayer()
+    // probes canPlayType('video/mp4; codecs="avc1.42001E, mp4a.40.2"') — a H.264+AAC
+    // combo — gets '' and REFUSES to instantiate the player at all (no <video>,
+    // UI skeleton spinning forever). The mobile player has no such combo probe: it
+    // plays a progressive MP4 in a plain <video>, where the missing AAC track is
+    // silently skipped — video WITH PICTURE but NO SOUND, which is the platform's
+    // ceiling. The facade copy warns the user about the missing audio.
+    const iframeUrl = `https://www.bilibili.com/blackboard/html5mobileplayer.html?${queryParams.join('&')}`;
     const directUrl = bvid ? `https://www.bilibili.com/video/${bvid}` : (aid ? `https://www.bilibili.com/video/av${aid}` : '#');
 
     return {
@@ -1096,7 +1108,7 @@
                     <span class="luogu-bilibili-play-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                     </span>
-                    <span class="luogu-bilibili-facade-text">点击加载视频（将连接 bilibili.com）</span>
+                    <span class="luogu-bilibili-facade-text">点击加载视频（VSCode 缺少音频解码，将无声播放）</span>
                   </button>
                 </div>
               </div>
