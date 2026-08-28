@@ -896,26 +896,28 @@ code[class*="language-"] {
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
-  /* Per-line horizontal scrolling is used so the gutter line number stays fixed on
-     the left while a long code line scrolls; the <pre> itself does not scroll. */
-  overflow-x: visible !important;
+  /* The <pre> is the ONE horizontal scroll container — ONE scrollbar at the
+     bottom of the block. The earlier per-line scrolling (each .code-line had
+     overflow-x:auto) painted a mini scrollbar under EVERY long line, scattered
+     through the middle of the block — "代码滚动条渲染位置出错". The gutter
+     still stays pinned during scroll via position:sticky on .code-line-number. */
+  overflow-x: auto !important;
+  overflow-y: hidden;
   width: 100%;
   box-sizing: border-box;
   display: block !important;
 }
 
 .code-line {
-  /* Each line is its own horizontal scroll container. The gutter line number is
-     position:sticky left, so when a long code line overflows only the code text
-     scrolls — the number stays pinned on the left and every row stays aligned.
-     This avoids both the flexbox collapse in legacy WebViews and the "line number
-     gets carried off-screen when the whole <pre> scrolls" issue. */
+  /* Rows must NOT scroll individually (see note above). width:max-content makes
+     every row as wide as the longest content so line backgrounds / highlight
+     bars extend all the way to the scroll end; min-width:100% keeps short rows
+     full-width so the highlight bar never looks ragged. */
   display: block !important;
-  overflow-x: auto;
   white-space: pre !important;
   padding: 0 16px;
+  width: max-content;
   min-width: 100%;
-  width: 100%;
   box-sizing: border-box;
 }
 

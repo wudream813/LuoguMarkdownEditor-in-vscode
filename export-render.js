@@ -58,11 +58,81 @@ function loadBilibiliPlayer(btn) {
   else { btn.replaceWith(iframe); }
 }
 function toggleTaskCheckbox() { /* 静态导出：仅视觉切换，不回写源码 */ }
+
+// ── 导出工具条：主题切换 + 复制 Markdown（v1.2.0）──
+function luoguApplyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.body.classList.remove('vscode-light', 'vscode-dark');
+  document.body.classList.add(theme === 'dark' ? 'vscode-dark' : 'vscode-light');
+  var btn = document.getElementById('luogu-theme-btn');
+  if (btn) btn.innerHTML = theme === 'dark' ? '☀ 亮色' : '☾ 暗色';
+  try { localStorage.setItem('luogu-export-theme', theme); } catch (e) {}
+}
+function luoguToggleTheme() {
+  var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  luoguApplyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+function luoguCopyMarkdown(btn) {
+  var el = document.getElementById('luogu-md-source');
+  if (!el) return;
+  var md = JSON.parse(el.textContent);
+  var done = function () {
+    var orig = btn.innerText; btn.innerText = '已复制 ✓';
+    setTimeout(function () { btn.innerText = orig; }, 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(md).then(done, function () { luoguCopyLegacy(md, done); });
+  } else {
+    luoguCopyLegacy(md, done);
+  }
+}
+function luoguCopyLegacy(text, done) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  ta.remove(); done();
+}
+// 初始主题：localStorage > 系统 prefers-color-scheme
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem('luogu-export-theme'); } catch (e) {}
+  var sys = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  luoguApplyTheme(saved || sys);
+})();
+`;
+
+// 右上角浮动工具条（主题切换 / 复制 Markdown）
+const TOOLBAR_HTML = `
+<div class="luogu-export-toolbar">
+  <button id="luogu-theme-btn" type="button" onclick="luoguToggleTheme()" title="切换亮/暗主题"></button>
+  <button type="button" onclick="luoguCopyMarkdown(this)" title="复制 Markdown 源码">⧉ 复制 Markdown</button>
+</div>
+`;
+
+const TOOLBAR_CSS = `
+.luogu-export-toolbar {
+  position: fixed; top: 14px; right: 16px; z-index: 9999;
+  display: flex; gap: 8px;
+  font-family: var(--vscode-font-family, "PingFang SC", "Microsoft YaHei", sans-serif);
+}
+.luogu-export-toolbar button {
+  padding: 6px 12px; border-radius: 16px; cursor: pointer;
+  font-size: 12px; line-height: 1; white-space: nowrap;
+  border: 1px solid var(--border-color, #d0d7de);
+  background: var(--bg-secondary, #f6f8fa);
+  color: var(--text-primary, #1f2328);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: filter 0.15s, transform 0.1s;
+}
+.luogu-export-toolbar button:hover { filter: brightness(0.95); transform: translateY(-1px); }
+@media print { .luogu-export-toolbar { display: none !important; } }
 `;
 
 const PRINT_CSS = `
 @media print {
-  .luogu-code-copy-button, .luogu-bilibili-facade-hint { display: none !important; }
+  .luogu-code-copy-btn, .luogu-code-copy-button, .luogu-bilibili-facade-hint,
+  .luogu-export-toolbar { display: none !important; }
   body { background: #fff !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
@@ -90,6 +160,10 @@ function buildStandaloneHtml(markdown, opts) {
   const stylesCss = read('styles.css');
   const previewCss = read('preview.css');
 
+  // 内嵌 Markdown 源码供「复制 Markdown」按钮使用。JSON.stringify 后用 
+  // 转义全部 < —— 防止源码中的 "</script>" 击穿 script 标签（ 是合法 JSON 转义）。
+  const mdSourceJson = JSON.stringify(markdown || '').replace(/</g, '\\u003c');
+
   return `<!DOCTYPE html>
 <html lang="zh-CN" data-theme="light">
 <head>
@@ -104,9 +178,12 @@ function buildStandaloneHtml(markdown, opts) {
     html, body { height: auto !important; overflow: visible !important; }
     body { max-width: 860px; margin: 0 auto; padding: 24px 32px; }
   </style>
+  <style>${TOOLBAR_CSS}</style>
   ${forPrint ? `<style>${PRINT_CSS}</style>` : ''}
 </head>
 <body class="vscode-light">
+  ${TOOLBAR_HTML}
+  <script id="luogu-md-source" type="application/json">${mdSourceJson}</script>
   <div id="previewContent" class="preview-content luogu-preview-root">${body}</div>
   <script>${HELPER_SCRIPT}</script>
   ${forPrint ? `<script>${PRINT_SCRIPT}</script>` : ''}

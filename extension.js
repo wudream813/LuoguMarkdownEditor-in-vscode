@@ -567,7 +567,8 @@ async function exportDocument(mode) {
   const target = await vscode.window.showSaveDialog({
     defaultUri: vscode.Uri.file(path.join(dir, mode === 'html' ? `${base}.html` : `${base}-print.html`)),
     filters: { 'HTML 文件': ['html'] },
-    title: mode === 'html' ? '导出 HTML' : '导出 PDF（生成打印用 HTML）',
+    // 导出 PDF 的流程备注：先导出为 HTML（打印优化版），再在浏览器里打印导出 PDF
+    title: mode === 'html' ? '导出 HTML' : '导出 PDF — 第 1 步：先导出为 HTML（第 2 步在浏览器中打印导出）',
   });
   if (!target) return;
 
@@ -605,7 +606,7 @@ async function exportDocument(mode) {
       }
     } else {
       await vscode.env.openExternal(target);
-      vscode.window.showInformationMessage('已在浏览器打开打印页面：在打印对话框选择「另存为 PDF」即可');
+      vscode.window.showInformationMessage('第 2 步：浏览器已打开该 HTML，使用浏览器「打印 → 另存为 PDF」完成导出');
     }
   } catch (e) {
     vscode.window.showErrorMessage(`导出失败：${e.message}`);
