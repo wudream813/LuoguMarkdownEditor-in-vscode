@@ -160,6 +160,7 @@ function findCodeSpans(line) {
 // ─────────────────────────────── 主入口 ───────────────────────────────
 // 返回 [{line, col, length, message, severity:'hint'}]
 function lintLuoguStyle(text) {
+  text = text.replace(/\r\n?/g, '\n'); // CRLF 归一：否则行尾 \r 使行尾空格/句末判定失效
   const issues = [];
   const MAX = 300;
   const push = (line, col, length, message) => {
@@ -417,15 +418,18 @@ function autoFixLuoguStyle(text) {
   let inFence = false, inMathBlock = false, blankRun = 0;
 
   for (let ln = 0; ln < origLines.length; ln++) {
-    const oline = origLines[ln];
+    // CRLF 兼容：剥掉行尾 \r 再跑规则（否则行尾类正则全部落空），写回时补回
+    const hasCR = origLines[ln].endsWith('\r');
+    const oline = hasCR ? origLines[ln].slice(0, -1) : origLines[ln];
     const trimmed = oline.trim();
+    const keep = hasCR ? '\r' : '';
 
-    if (/^(```|~~~)/.test(trimmed)) { inFence = !inFence; out.push(oline); blankRun = 0; continue; }
-    if (!inFence && /^\$\$/.test(trimmed)) { inMathBlock = !inMathBlock; out.push(oline); blankRun = 0; continue; }
-    if (inFence || inMathBlock) { out.push(oline); continue; }
+    if (/^(```|~~~)/.test(trimmed)) { inFence = !inFence; out.push(oline + keep); blankRun = 0; continue; }
+    if (!inFence && /^\$\$/.test(trimmed)) { inMathBlock = !inMathBlock; out.push(oline + keep); blankRun = 0; continue; }
+    if (inFence || inMathBlock) { out.push(oline + keep); continue; }
 
     // 空行压缩：连续空行最多保留 1 个
-    if (trimmed === '') { blankRun++; if (blankRun <= 1) out.push(''); continue; }
+    if (trimmed === '') { blankRun++; if (blankRun <= 1) out.push(keep); continue; }
     blankRun = 0;
 
     // 行尾空格规范化：恰好两个空格（硬换行）保留，其余剥除
@@ -546,7 +550,7 @@ function autoFixLuoguStyle(text) {
       }
       line = arr.join('');
     }
-    out.push(line);
+    out.push(line + keep);
   }
 
   return out.join('\n');
