@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { buildStandaloneHtml } = require('./export-render');
 const { lintLuoguMarkdown } = require('./lint');
+const { lintLuoguStyle } = require('./style-lint');
 
 // Full preset template library (exported for both web and Node — shared file).
 // Previously dead code: the sidebar inserted the tiny hard-coded fallbacks below
@@ -342,15 +343,32 @@ function activate(context) {
 
   function lintDocument(doc) {
     if (!doc || doc.languageId !== 'markdown') return;
-    const issues = lintLuoguMarkdown(doc.getText());
+    const text = doc.getText();
     const diags = [];
-    for (const it of issues) {
+    // 语法检查 → Error/Warning（v1.1.1）
+    for (const it of lintLuoguMarkdown(text)) {
       const line = Math.min(Math.max(0, it.line), doc.lineCount - 1);
-      diags.push(new vscode.Diagnostic(
+      const d = new vscode.Diagnostic(
         doc.lineAt(line).range,
         it.message,
         it.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning
-      ));
+      );
+      d.source = 'luogu-语法';
+      diags.push(d);
+    }
+    // 洛谷排版规范检查 → Hint（v1.2.2，最轻量级别，带精确列范围）
+    for (const it of lintLuoguStyle(text)) {
+      const line = Math.min(Math.max(0, it.line), doc.lineCount - 1);
+      const lineLen = doc.lineAt(line).text.length;
+      const start = Math.min(it.col, lineLen);
+      const end = Math.max(Math.min(start + (it.length || 1), lineLen), start + (start < lineLen ? 1 : 0));
+      const d = new vscode.Diagnostic(
+        new vscode.Range(line, start, line, end),
+        it.message,
+        vscode.DiagnosticSeverity.Hint
+      );
+      d.source = 'luogu-排版';
+      diags.push(d);
     }
     diagnostics.set(doc.uri, diags);
   }

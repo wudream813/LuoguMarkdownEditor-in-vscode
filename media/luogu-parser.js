@@ -1075,12 +1075,12 @@
         return id;
       });
 
-      // 3. Images and Bilibili Video Embed (protect as tokens before emphasis)
-      // URL group tolerates ONE level of balanced parens (e.g. Wikipedia's
-      // ".../Foo_(bar)") — plain (.*?) truncated the URL at the first ')'.
-      // The ALT text likewise tolerates ONE level of balanced brackets.
+      // 3. Images, Bilibili Video Embed and standard links (protected as tokens
+      // before emphasis). Token generation lives in these two closures, invoked
+      // from the balanced-bracket scanner below.
       const mediaTokens = [];
-      s = s.replace(/!\[((?:\\.|[^\[\]\\]|\[(?:\\.|[^\[\]\\])*\])*)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, alt, target) => {
+      const linkTokens = [];
+      const _renderMediaToken = (alt, target) => {
         let rawTarget = target.trim();
         let title = '';
         const titleMatch = rawTarget.match(/^(.*?)\s+["'](.*?)["']$/);
@@ -1124,22 +1124,11 @@
         const id = `LUOGUMEDIATOKEN${mediaTokens.length}END`;
         mediaTokens.push(mediaHtml);
         return id;
-      });
+      };
 
-      // 4. Protect standard links and auto links before emphasis
-      const linkTokens = [];
-      // Auto links: <http...>
-      s = s.replace(/<(https?:\/\/[^\s>]+)>/g, (m, url) => {
-        const id = `LUOGULINKTOKEN${linkTokens.length}END`;
-        linkTokens.push(`<a href="${escapeHtml(sanitizeUrl(url))}" target="_blank" rel="noopener noreferrer" class="luogu-link">${escapeHtml(url)}</a>`);
-        return id;
-      });
-
-      // Standard links: [text](url "title") — same balanced-paren URL group as images.
-      // The LABEL tolerates ONE level of balanced brackets ([P3195 [HNOI2008] x](…)
-      // is the standard Luogu problem-title format); plain [^\]]+ failed on it and
-      // the whole link leaked through as literal text.
-      s = s.replace(/\[((?:\\.|[^\[\]\\]|\[(?:\\.|[^\[\]\\])*\])+)\]\(((?:[^()\\]|\\.|\([^()]*\))*)\)/g, (match, label, target) => {
+      // Standard links: [text](url "title")
+      const _renderLinkToken = (label, target) => {
+        if (!label) return null; // empty link text is not a link (regex-era parity)
         let rawTarget = target.trim();
         let title = '';
         const titleMatch = rawTarget.match(/^(.*?)\s+["'](.*?)["']$/);
@@ -1151,7 +1140,50 @@
         const id = `LUOGULINKTOKEN${linkTokens.length}END`;
         linkTokens.push(`<a href="${escapeHtml(sanitizeUrl(rawTarget))}"${titleAttr} target="_blank" rel="noopener noreferrer" class="luogu-link">${this.renderInline(label)}</a>`);
         return id;
+      };
+
+      // Images + links may nest brackets to ARBITRARY depth — Luogu/CommonMark
+      // allows balanced brackets in link text ([[[]]](u), [P3195 [HNOI2008] x](u))
+      // and images inside link labels. Regexes cap out at one nesting level; a
+      // depth-count scan does not. Escapes/inline-code are already protected as
+      // tokens by now, so plain bracket/paren counting here is escape-safe.
+      const scanBalanced = (str, openIdx, openCh, closeCh) => {
+        let depth = 0;
+        for (let j = openIdx; j < str.length; j++) {
+          const c = str[j];
+          if (c === openCh) depth++;
+          else if (c === closeCh) { depth--; if (depth === 0) return j; }
+        }
+        return -1;
+      };
+
+      let scanned = '';
+      for (let i = 0; i < s.length;) {
+        const isImage = s[i] === '!' && s[i + 1] === '[';
+        if (!isImage && s[i] !== '[') { scanned += s[i]; i++; continue; }
+        const openIdx = isImage ? i + 1 : i;
+        const closeLabel = scanBalanced(s, openIdx, '[', ']');
+        if (closeLabel < 0 || s[closeLabel + 1] !== '(') { scanned += s[i]; i++; continue; }
+        const closeTarget = scanBalanced(s, closeLabel + 1, '(', ')');
+        if (closeTarget < 0) { scanned += s[i]; i++; continue; }
+        const label = s.slice(openIdx + 1, closeLabel);
+        const target = s.slice(closeLabel + 2, closeTarget);
+        const token = isImage ? _renderMediaToken(label, target) : _renderLinkToken(label, target);
+        if (token === null) { scanned += s[i]; i++; continue; }
+        scanned += token;
+        i = closeTarget + 1;
+      }
+      s = scanned;
+
+      // 4. Protect auto links before emphasis
+      // Auto links: <http...>
+      s = s.replace(/<(https?:\/\/[^\s>]+)>/g, (m, url) => {
+        const id = `LUOGULINKTOKEN${linkTokens.length}END`;
+        linkTokens.push(`<a href="${escapeHtml(sanitizeUrl(url))}" target="_blank" rel="noopener noreferrer" class="luogu-link">${escapeHtml(url)}</a>`);
+        return id;
       });
+
+      // (Standard links are handled by the balanced-bracket scanner above.)
 
       // 4.5. Neutralise any remaining raw HTML.
       //
