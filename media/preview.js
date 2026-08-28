@@ -70,7 +70,12 @@
       iframe.setAttribute('framespacing', '0');
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.setAttribute('referrerpolicy', 'no-referrer');
-      iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-presentation');
+      // allow-same-origin + allow-forms are REQUIRED: without same-origin the
+      // player runs as an opaque origin — localStorage/cookies are blocked and
+      // Bilibili's player init crashes into a black "video won't load" screen.
+      // Deliberately NO allow-top-navigation (must not let the player hijack
+      // the whole webview panel to bilibili.com).
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
       loadedBilibiliVideos.set(src, iframe);
     }
 

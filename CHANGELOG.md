@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.14] - 2026-08-28
+
+### 修复
+
+- **Bilibili 视频无法加载（黑屏）**：iframe 的 `sandbox` 缺少 `allow-same-origin` 与 `allow-forms`，播放器在 opaque origin 下运行导致 localStorage/cookies 被禁用、播放器初始化崩溃。现为 `allow-scripts allow-same-origin allow-forms allow-popups allow-presentation`（仍不授予 `allow-top-navigation`，防止播放器劫持面板跳转）
+
 ## [1.0.13] - 2026-08-27
 
 ### 修复
