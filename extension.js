@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { buildStandaloneHtml } = require('./export-render');
 const { lintLuoguMarkdown } = require('./lint');
-const { lintLuoguStyle } = require('./style-lint');
+const { lintLuoguStyle, autoFixLuoguStyle } = require('./style-lint');
 
 // Full preset template library (exported for both web and Node — shared file).
 // Previously dead code: the sidebar inserted the tiny hard-coded fallbacks below
@@ -555,9 +555,17 @@ function activate(context) {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== 'markdown') return;
     const text = editor.document.getText();
-    const fixed = fixSpacing(text);
-    if (text !== fixed) { replaceAllContent(fixed); vscode.window.showInformationMessage('排版修复完成'); }
-    else vscode.window.showInformationMessage('排版已符合规范');
+    // v1.2.4：全量修复器（style-lint.js），覆盖《洛谷主题库题解规范》中所有可
+    // 机械判定的条目；修复后 lint 同日复检应为 0 提示。
+    const fixed = autoFixLuoguStyle(text);
+    if (text !== fixed) {
+      replaceAllContent(fixed);
+      const rest = lintLuoguStyle(fixed).length;
+      vscode.window.showInformationMessage(
+        rest > 0 ? `排版修复完成（剩余 ${rest} 条提示需人工处理）` : '排版修复完成 ✓');
+    } else {
+      vscode.window.showInformationMessage('排版已符合规范');
+    }
   });
   reg('luogu-editor.exportHtml', () => exportDocument('html'));
   reg('luogu-editor.exportPdf', () => exportDocument('pdf'));
@@ -654,31 +662,6 @@ async function insertTemplateFromFile(key) {
   if (ok === '确定') { replaceAllContent(tpl); vscode.window.showInformationMessage('模板已应用'); }
 }
 
-function fixSpacing(text) {
-  const blocks = []; let idx = 0;
-  text = text.replace(/```[\s\S]*?```/g, (m) => { const k = `\x00C${idx++}\x00`; blocks.push({k,v:m}); return k; });
-  text = text.replace(/`[^`]+`/g, (m) => { const k = `\x00C${idx++}\x00`; blocks.push({k,v:m}); return k; });
-  text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { const k = `\x00C${idx++}\x00`; blocks.push({k,v:m}); return k; });
-  text = text.replace(/\$[^\$\n]+?\$/g, (m) => { const k = `\x00C${idx++}\x00`; blocks.push({k,v:m}); return k; });
-  text = text.replace(/([\u4e00-\u9fff])([A-Za-z0-9])/g, '$1 $2');
-  text = text.replace(/([A-Za-z0-9])([\u4e00-\u9fff])/g, '$1 $2');
-  // A placeholder token is \x00 C <digits> \x00. The old rule omitted the TRAILING
-  // \x00, so it could never match and no space was added AFTER a placeholder.
-  text = text.replace(/([\u4e00-\u9fff])(\x00C\d*\x00)/g, '$1 $2');
-  text = text.replace(/(\x00C\d*\x00)([\u4e00-\u9fff])/g, '$1 $2');
-  // Collapse 2+ space runs to one — but NEVER touch end-of-line whitespace: two
-  // trailing spaces are Luogu's hard line break; the old /  +/g collapsed them too,
-  // silently deleting every hard break in the document.
-  text = text.replace(/ {2,}/gm, (run, offset, str) => {
-    const next = str[offset + run.length];
-    return (next === '\n' || next === '\r' || next === undefined) ? run : ' ';
-  });
-  // Function-callback replacement: a plain string second argument interprets $&,
-  // $', $` and $$ inside the ORIGINAL code/math as replacement patterns and
-  // corrupts the user's code (bash/perl/sed snippets are full of them).
-  for (const b of blocks) text = text.replace(b.k, () => b.v);
-  return text;
-}
 
 function deactivate() {}
 

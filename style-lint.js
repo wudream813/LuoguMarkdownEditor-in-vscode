@@ -219,9 +219,14 @@ function lintLuoguStyle(text) {
     }
 
     // ── §1.1 句末必须有标点 ──
-    // 仅检查普通段落：非标题/列表过短行/表格/HTML/注释行；行末（遮罩后）既非
-    // 句读标点也非结构字符时提示。允许列表项纳入检查（题解正文通篇需要标点）。
-    if (!hm && oline.trim().length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(oline)) {
+    // 段落感知：软换行的段落跨多行，只有段落的最后一行（下一行为空/结构行/EOF）
+    // 才判定句末；列表项独立成句，逐项判定。
+    const isListItem = /^\s*(?:[-*+]|\d{1,6}[.、)】])\s/.test(oline);
+    const nextRaw = ln + 1 < origLines.length ? origLines[ln + 1] : '';
+    const nextTrim = nextRaw.trim();
+    const paragraphEnds = isListItem || nextTrim === '' ||
+      /^(#{1,6}\s|```|~~~|\$\$|:::|[|>]|\s*[-*+]\s|\s*\d{1,6}[.、)】]\s)/.test(nextTrim);
+    if (!hm && paragraphEnds && oline.trim().length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(oline)) {
       const lastVisible = mline.replace(/\s+$/, '').slice(-1);
       const hasCJK = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(mline);
       if (hasCJK && lastVisible && SENTENCE_END.indexOf(lastVisible) < 0) {
@@ -388,4 +393,172 @@ function lintLuoguStyle(text) {
   return issues;
 }
 
-module.exports = { lintLuoguStyle };
+// ─────────────────────────── 一键排版自动修复（v1.2.4）───────────────────────────
+// 与 lintLuoguStyle 同一套区域语义（围栏代码/数学块原文保留；行内代码与行内公式
+// 在文本规则执行期间用占位符保护，公式内部只应用 §2 机械替换）。
+// 覆盖所有可机械判定的规则；无法安全推断的（标题层级、代码块语言、公式内混入
+// 中文文字）保持原样交人工处理。
+
+// 行内数学区间内部修复（§2 数学语言）
+function fixMathInner(inner) {
+  let s = inner;
+  s = s.replace(/==/g, ' = ');              // 比较等号（同余需人工改 \equiv）
+  s = s.replace(/<=/g, ' \\le ').replace(/>=/g, ' \\ge ').replace(/!=/g, ' \\ne ');
+  s = s.replace(/(?<![\\*a-zA-Z])\*(?!\*)/g, ' \\times ');     // * 充当乘号
+  s = s.replace(/(?<![\\a-zA-Z])mod(?![a-zA-Z])/g, ' \\bmod ');    // 裸 mod
+  // 公式内全角标点 → 半角（混入中文文字不处理，交人工）
+  s = s.replace(/，/g, ', ').replace(/；/g, '; ').replace(/：/g, ': ')
+       .replace(/！/g, '!').replace(/？/g, '?').replace(/。/g, '.');
+  s = s.replace(/ {2,}/g, ' ').trim();
+  return s;
+}
+
+function autoFixLuoguStyle(text) {
+  const IS_CN = (c) => !!c && /[一-鿿㐀-䶿豈-﫿]/.test(c);
+  const IS_ALNUM = (c) => !!c && /[A-Za-z0-9]/.test(c);
+  const origLines = text.split('\n');
+  const out = [];
+  let inFence = false, inMathBlock = false, blankRun = 0;
+
+  for (let ln = 0; ln < origLines.length; ln++) {
+    const oline = origLines[ln];
+    const trimmed = oline.trim();
+
+    if (/^(```|~~~)/.test(trimmed)) { inFence = !inFence; out.push(oline); blankRun = 0; continue; }
+    if (!inFence && /^\$\$/.test(trimmed)) { inMathBlock = !inMathBlock; out.push(oline); blankRun = 0; continue; }
+    if (inFence || inMathBlock) { out.push(oline); continue; }
+
+    // 空行压缩：连续空行最多保留 1 个
+    if (trimmed === '') { blankRun++; if (blankRun <= 1) out.push(''); continue; }
+    blankRun = 0;
+
+    // 行尾空格规范化：恰好两个空格（硬换行）保留，其余剥除
+    let line = oline.replace(/[ \t]+$/, (ws) => (ws === '  ' ? ws : ''));
+
+    // ── §2 公式碎拼合并：$a$ + $b$ → $a + b$（循环至收敛）──
+    let merged = line, guard = 0;
+    do {
+      line = merged;
+      merged = line.replace(/(\$[^$\n]+\$)(\s*[+\-=<>]+\s*)(\$[^$\n]+\$)/g,
+        (m, a, gap, b) => a.slice(0, -1) + gap + b.slice(1));
+    } while (merged !== line && ++guard < 20);
+
+    // ── §2 行内公式内部修复；英文单词误用 LaTeX 拆壳（$DFS$ → DFS）──
+    line = line.replace(/\$\$([^$\n]+)\$\$|\$([^$\n]+)\$/g, (m, dbl, sgl) => {
+      const inner = (dbl !== undefined ? dbl : sgl);
+      if (/^[A-Za-z]{3,}( +[A-Za-z]{3,})*$/.test(inner.trim()) && inner.indexOf('\\') < 0) {
+        return inner.trim();
+      }
+      const fixed = fixMathInner(inner);
+      return dbl !== undefined ? `$$${fixed}$$` : `$${fixed}$`;
+    });
+
+    // ── 行内公式 / 行内代码 / 转义对 → 占位符，保护其不受文本规则影响 ──
+    const tokens = [];
+    line = line.replace(/\$\$[^$\n]+\$\$|\$[^$\n]+\$|`[^`\n]+`|\\[\\`*_{}\[\]()#+\-.!$~|]/g,
+      (m) => { tokens.push(m); return `Z${String(tokens.length - 1).padStart(3, '0')}Z`; });
+
+    // ── §1.3 预清理：中文语境下半角标点两侧的空格先剥落（如「中文 ，中文」）──
+    line = line.replace(/([一-鿿㐀-䶿豈-﫿。，！？；：、（）《》「」]) +([,.;:!?]) *(?=[一-鿿㐀-䶿豈-﫿。，！？；：、]|$)/g, '$1$2');
+
+    // ── §1.1 中文语境半角标点 → 全角（逐字符上下文换算）──
+    {
+      const HALF2FULL = { ',': '，', '.': '。', ';': '；', ':': '：', '!': '！', '?': '？' };
+      const arr = line.split('');
+      for (let i = 0; i < arr.length; i++) {
+        const ch = arr[i], pv = arr[i - 1] || '', nx = arr[i + 1] || '';
+        const leftCJK = IS_CN(pv) || FULL_PUNCT.indexOf(pv) >= 0;
+        const rightOK = IS_CN(nx) || FULL_PUNCT.indexOf(nx) >= 0 || IS_ALNUM(nx) || nx === '' || nx === ' ';
+        if (HALF2FULL[ch] && leftCJK && rightOK) {
+          if (ch === '.' && !(IS_CN(nx) || nx === '' || nx === ' ')) continue; // 3.14 / luogu.com 之类不换算
+          arr[i] = HALF2FULL[ch];
+          continue;
+        }
+        if (ch === '(' && IS_CN(nx)) { arr[i] = '（'; continue; }
+        if (ch === ')' && IS_CN(pv)) { arr[i] = '）'; continue; }
+      }
+      line = arr.join('');
+    }
+
+    // ── §1.3 全角标点两侧严禁空格 ──
+    {
+      const arr = line.split('');
+      for (let i = 0; i < arr.length; i++) {
+        if (FULL_PUNCT.indexOf(arr[i]) < 0) continue;
+        if (arr[i - 1] === ' ') {
+          let pi = i - 1; while (pi >= 0 && arr[pi] === ' ') pi--;
+          const pv = pi >= 0 ? arr[pi] : '';
+          if (IS_CN(pv) || IS_ALNUM(pv) || pv === ')' || pv === ']' || FULL_PUNCT.indexOf(pv) >= 0) {
+            for (let d = i - 1; d > pi; d--) arr[d] = '';
+          }
+        }
+        if (arr[i + 1] === ' ') {
+          let ni = i + 1; while (ni < arr.length && arr[ni] === ' ') ni++;
+          const nv = ni < arr.length ? arr[ni] : '';
+          if (IS_CN(nv) || IS_ALNUM(nv)) {
+            for (let d = i + 1; d < ni; d++) arr[d] = '';
+          }
+        }
+      }
+      line = arr.join('');
+    }
+
+    // ── §1.2 盘古之白：中文 ↔ 英文/数字/公式(占位符) 之间补半角空格 ──
+    line = line.replace(/(?<=[一-鿿㐀-䶿豈-﫿])(?=[A-Za-z0-9])/g, ' ')
+               .replace(/(?<=[A-Za-z0-9])(?=[一-鿿㐀-䶿豈-﫿])/g, ' ');
+
+    // ── §2 纯文本 O(…)、5e9、数字*数字 ──
+    line = line.replace(/(?<![A-Za-z0-9_$\\])O\(([^()]{1,24})\)/g, (m, cap) => `$\\mathcal{O}(${cap})$`);
+    line = line.replace(/(?<![A-Za-z0-9_.$\\])(\d+(?:\.\d+)?)[eE]([+-]?\d+)/g,
+      (m, mant, exp) => `$${mant} \\times 10^{${exp}}$`);
+    line = line.replace(/(?<![\w*$\\])(\d[0-9,]*\d|\d)\s*\*(?!\*)\s*(\d[0-9,]*\d|\d)(?![\w$])/g,
+      (m, a, b) => `$${a} \\times ${b}$`);
+    // 新公式可能与中文紧贴，再补一轮盘古
+    line = line.replace(/(?<=[一-鿿㐀-䶿豈-﫿])(?=[A-Za-z0-9])/g, ' ')
+               .replace(/(?<=[A-Za-z0-9])(?=[一-鿿㐀-䶿豈-﫿])/g, ' ');
+
+    // ── §1.1 句末补充句号（与 lint 同条件——段落感知；硬换行两个空格保留在句号之后）──
+    const hm = /^(#{1,6})\s/.test(line);
+    const isListItem = /^\s*(?:[-*+]|\d{1,6}[.、)】])\s/.test(oline);
+    const nextRaw2 = ln + 1 < origLines.length ? origLines[ln + 1] : '';
+    const nextTrim2 = nextRaw2.trim();
+    const paragraphEnds = isListItem || nextTrim2 === '' ||
+      /^(#{1,6}\s|```|~~~|\$\$|:::|[|>]|\s*[-*+]\s|\s*\d{1,6}[.、)】]\s)/.test(nextTrim2);
+    if (!hm && paragraphEnds && trimmed.length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(line)) {
+      const hardBreak = /  $/.test(line);
+      const base = line.replace(/[ \t]+$/, '');
+      const last = base.slice(-1);
+      if (IS_CN(last) || IS_ALNUM(last) || last === ')' || last === '$' || last === '`') {
+        line = base + '。' + (hardBreak ? '  ' : '');
+      }
+    }
+
+    // ── 还原占位符 ──
+    line = line.replace(/Z(\d{3})Z/g, (m, n) => (tokens[+n] !== undefined ? tokens[+n] : m));
+
+    // ── §1.1 补充轮：还原后紧邻公式 `$` / 代码 `` ` `` / 右括号的半角标点再换算
+    // （如「$x$，中文」的逗号、「$…$.」句末句号、链接后的标点）──
+    {
+      const HALF2FULL = { ',': '，', '.': '。', ';': '；', ':': '：', '!': '！', '?': '？' };
+      const arr = line.split('');
+      for (let i = 0; i < arr.length; i++) {
+        const ch = arr[i];
+        if (!HALF2FULL[ch]) continue;
+        const pv = arr[i - 1] || '';
+        const nx = arr[i + 1] || '';
+        const leftOK = IS_CN(pv) || FULL_PUNCT.indexOf(pv) >= 0 || pv === '$' || pv === '`' || pv === ')' || pv === ']';
+        if (!leftOK) continue;
+        if (ch === '.') {
+          if (!((IS_CN(nx) || nx === '' || nx === ' ')) || IS_ALNUM(pv)) continue;
+        } else if (!(IS_CN(nx) || FULL_PUNCT.indexOf(nx) >= 0 || nx === '' || nx === ' ')) continue;
+        arr[i] = HALF2FULL[ch];
+      }
+      line = arr.join('');
+    }
+    out.push(line);
+  }
+
+  return out.join('\n');
+}
+
+module.exports = { lintLuoguStyle, autoFixLuoguStyle };
