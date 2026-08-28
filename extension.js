@@ -187,6 +187,9 @@ class PreviewPanel {
         if (editor) {
           toggleTaskInEditor(editor, msg.taskLine, msg.checked);
         }
+      } else if (msg.type === 'preview-scrolled') {
+        // Reverse scroll sync: user scrolled the PREVIEW pane → follow in editor.
+        this._scrollEditorToLine(msg.topLine);
       }
     }, null, this.disposables);
   }
@@ -212,6 +215,28 @@ class PreviewPanel {
   scrollSync(topLine, instant = false) {
     if (!this.panel) return;
     this.panel.webview.postMessage({ type: 'scroll-sync', topLine, instant });
+  }
+
+  // Echo-guard state for preview→editor sync: the revealRange below fires
+  // onDidChangeTextEditorVisibleRanges, which would sync RIGHT BACK into the
+  // preview and fight the user's scroll (quantized snap to the line top).
+  _suppressEchoLine = -1;
+  _suppressEchoUntil = 0;
+
+  _scrollEditorToLine(topLine) {
+    if (!this.boundUri || typeof topLine !== 'number' || !isFinite(topLine)) return;
+    // Only follow into an editor that is visibly showing the BOUND document —
+    // never hijack an unrelated active editor.
+    const editor = vscode.window.visibleTextEditors.find(
+      (ed) => ed.document.uri.toString() === this.boundUri
+    );
+    if (!editor) return;
+    const line = Math.max(0, Math.min(editor.document.lineCount - 1, Math.floor(topLine)));
+    const cur = editor.visibleRanges[0];
+    if (cur && cur.start.line === line) return; // already at top; reveal would no-op
+    this._suppressEchoLine = line;
+    this._suppressEchoUntil = Date.now() + 500;
+    editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
   }
 
   setTheme(theme) {
@@ -375,10 +400,17 @@ function activate(context) {
   // range had not changed.
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-      if (e.textEditor.document.languageId === 'markdown' && PreviewPanel.instance) {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 16);
+      const preview = PreviewPanel.instance;
+      if (!preview || e.textEditor.document.languageId !== 'markdown') return;
+      // Echo guard: if this visibleRanges change is the one WE just caused by
+      // following a preview scroll, swallow it — syncing it back would fight the
+      // user's preview scroll and snap the preview back to the quantized line top.
+      if (preview._suppressEchoUntil > Date.now() &&
+          e.visibleRanges[0] && e.visibleRanges[0].start.line === preview._suppressEchoLine) {
+        return;
       }
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => doScrollSync(e.textEditor), 16);
     })
   );
 

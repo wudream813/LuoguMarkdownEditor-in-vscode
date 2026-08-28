@@ -186,19 +186,26 @@
     previewEl.innerHTML = parser.render(markdown || '');
     restoreCalloutStates(saved);
     restoreBilibiliVideos();
+    // A re-render REPLACES innerHTML under the scroll container; if the content
+    // got shorter the browser clamps scrollTop, which fires a 'scroll' event.
+    // That must not be relayed to the editor as a user scroll.
+    lastProgrammaticScroll = Date.now();
   }
 
   // ── Scroll sync ──
 
-  // NOTE: there used to be an `isSyncing` lock here that DROPPED scroll-sync
-  // messages arriving within 150ms of a programmatic smooth scroll. But this
-  // script has NO scroll listener of its own — sync can never feed back into
-  // itself — so the lock protected against nothing and only ate the FINAL
-  // landing position when the user scrolled right as the preview opened
-  // ("刚打开时滚动没同步"). Messages must always be honored.
-  function scrollToLine(topLine, instant) {
-    if (!previewEl) return;
+  // Loop prevention for the bidirectional sync: scroll events caused BY a sync
+  // (programmatic scrollTo below, or a re-render clamping scrollTop) must not be
+  // relayed back to the editor, and the editor-side reveal it triggers must not
+  // sync back here (the extension swallows that echo). Anything within
+  // SUPPRESS_MS of a programmatic scroll is considered non-user input.
+  var lastProgrammaticScroll = 0;
+  var SUPPRESS_MS = 400; // covers the smooth-scroll animation tail
 
+  // Collect [data-src-line] anchors as sorted {line, top-in-document} points,
+  // plus a sentinel at the document bottom. Shared by both sync directions.
+  function collectAnchorPoints(scrollContainer) {
+    if (!previewEl) return null;
     var anchors = [];
     var seen = {};
     previewEl.querySelectorAll('[data-src-line]').forEach(function (el) {
@@ -209,22 +216,29 @@
       anchors.push({ line: line, el: el });
     });
     anchors.sort(function (a, b) { return a.line - b.line; });
-    if (anchors.length === 0) return;
+    if (anchors.length === 0) return null;
+
+    var containerTop = scrollContainer.getBoundingClientRect().top;
+    var points = anchors.map(function (a) {
+      var rect = a.el.getBoundingClientRect();
+      return { line: a.line, top: rect.top + scrollContainer.scrollTop - containerTop };
+    });
+    points.push({ line: 999999, top: scrollContainer.scrollHeight }); // sentinel
+    return points;
+  }
+
+  // NOTE: there used to be an `isSyncing` lock here that DROPPED scroll-sync
+  // messages arriving within 150ms of a programmatic smooth scroll — it ate the
+  // FINAL landing position when the user scrolled right as the preview opened.
+  // Messages are always honored now; loop prevention uses precise timestamp
+  // suppression on the relay side instead of dropping inbound syncs.
+  function scrollToLine(topLine, instant) {
+    if (!previewEl) return;
 
     // The scrollable container is document.body (see preview.css)
     var scrollContainer = document.body;
-
-    // Calculate positions for each anchor
-    var points = anchors.map(function (a) {
-      var rect = a.el.getBoundingClientRect();
-      return {
-        line: a.line,
-        top: rect.top + scrollContainer.scrollTop - scrollContainer.getBoundingClientRect().top
-      };
-    });
-
-    // Add endpoint
-    points.push({ line: 999999, top: scrollContainer.scrollHeight });
+    var points = collectAnchorPoints(scrollContainer);
+    if (!points) return;
 
     // Find the two anchors that bracket our target line
     var target = 0;
@@ -243,11 +257,51 @@
     var want = Math.max(0, Math.min(maxScroll, target));
 
     if (Math.abs(scrollContainer.scrollTop - want) > 2) {
+      lastProgrammaticScroll = Date.now(); // starting now, scrolls are machine-made
       // 'instant' positioning (opening the preview, switching files) must jump —
       // smooth animation there reads as the preview drifting on its own.
       scrollContainer.scrollTo({ top: want, behavior: instant ? 'auto' : 'smooth' });
     }
   }
+
+  // Reverse mapping for preview→editor sync: which source line is at the top of
+  // the preview viewport right now? Returns a FRACTIONAL line (or null).
+  function lineForScrollTop() {
+    var scrollContainer = document.body;
+    var points = collectAnchorPoints(scrollContainer);
+    if (!points) return null;
+    var st = scrollContainer.scrollTop;
+    if (st <= points[0].top) return points[0].line;
+    for (var i = 0; i < points.length - 1; i++) {
+      if (points[i].top <= st && points[i + 1].top >= st) {
+        var span = points[i + 1].top - points[i].top;
+        var t = span > 0 ? (st - points[i].top) / span : 0;
+        t = Math.max(0, Math.min(1, t));
+        // Never interpolate INTO the sentinel (line 999999): scrolling through
+        // the tail below the last anchor would report absurd line numbers.
+        var nextLine = points[i + 1].line >= 999999 ? points[i].line : points[i + 1].line;
+        return points[i].line + (nextLine - points[i].line) * t;
+      }
+    }
+    return points[points.length - 2].line;
+  }
+
+  // Relay USER scrolls of the preview up to the extension, throttled (~80ms)
+  // with a trailing fire so the final position always lands. Programmatic
+  // scrolls (suppression window) are ignored — relaying them would create a
+  // sync loop between the two panes.
+  var relayTimer = null;
+  document.body.addEventListener('scroll', function () {
+    if (Date.now() - lastProgrammaticScroll < SUPPRESS_MS) return;
+    if (relayTimer) return;
+    relayTimer = setTimeout(function () {
+      relayTimer = null;
+      if (Date.now() - lastProgrammaticScroll < SUPPRESS_MS) return;
+      var line = lineForScrollTop();
+      if (line === null || !vscodeApi) return;
+      vscodeApi.postMessage({ type: 'preview-scrolled', topLine: line });
+    }, 80);
+  }, { passive: true });
 
   // ── Theme ──
 
