@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.16] - 2026-08-28
+
+### 修复
+
+- **Bilibili 视频画面仍加载不出（v1.0.15 未根治）**：将 iframe Referer 策略从「依赖默认继承」改为显式 `referrerpolicy="origin"`。curl 实测证实：视频 CDN 要求 Referer 为 bilibili.com 域（`player.bilibili.com` → 206 放行，空 Referer → 403），而 webview 外层页面的 referrer policy 不受扩展控制，继承结果可能是空 Referer。显式 `origin` 无论外层如何都把 Referer 锁定为 `https://player.bilibili.com`
+
 ## [1.0.15] - 2026-08-28
 
 ### 修复

@@ -69,12 +69,16 @@
       iframe.setAttribute('frameborder', 'no');
       iframe.setAttribute('framespacing', '0');
       iframe.setAttribute('allowfullscreen', 'true');
-      // NOTE: deliberately NO referrerpolicy attribute. It propagates to every
-      // request the player makes INSIDE the iframe: 'no-referrer' empties the
-      // Referer of video CDN requests (upos-*.bilivideo.com), which Bilibili's
-      // hotlink protection rejects with 403 — metadata loads but no picture.
-      // With the attribute omitted the player's own origin (player.bilibili.com)
-      // is sent and the CDN lets the stream through.
+      // referrerpolicy='origin' is REQUIRED and must be explicit. The iframe's
+      // policy propagates to every request the player makes INSIDE the frame;
+      // Bilibili's video CDN (upos-*.bilivideo.com) hotlink-checks the Referer
+      // and 403s anything that isn't a bilibili.com origin (verified: empty →
+      // 403, player.bilibili.com → 206). Relying on the inherited default is
+      // fragile (the outer webview page's own policy may yield an EMPTY Referer
+      // — exactly what made metadata load but never a single video frame).
+      // 'origin' pins the Referer to https://player.bilibili.com regardless of
+      // what the outer webview does.
+      iframe.setAttribute('referrerpolicy', 'origin');
       // allow-same-origin + allow-forms are REQUIRED: without same-origin the
       // player runs as an opaque origin — localStorage/cookies are blocked and
       // Bilibili's player init crashes into a black "video won't load" screen.
