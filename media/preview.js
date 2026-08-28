@@ -190,11 +190,14 @@
 
   // ── Scroll sync ──
 
-  var isSyncing = false;
-  var scrollTimeout = null;
-
-  function scrollToLine(topLine) {
-    if (!previewEl || isSyncing) return;
+  // NOTE: there used to be an `isSyncing` lock here that DROPPED scroll-sync
+  // messages arriving within 150ms of a programmatic smooth scroll. But this
+  // script has NO scroll listener of its own — sync can never feed back into
+  // itself — so the lock protected against nothing and only ate the FINAL
+  // landing position when the user scrolled right as the preview opened
+  // ("刚打开时滚动没同步"). Messages must always be honored.
+  function scrollToLine(topLine, instant) {
+    if (!previewEl) return;
 
     var anchors = [];
     var seen = {};
@@ -240,9 +243,9 @@
     var want = Math.max(0, Math.min(maxScroll, target));
 
     if (Math.abs(scrollContainer.scrollTop - want) > 2) {
-      isSyncing = true;
-      scrollContainer.scrollTo({ top: want, behavior: 'smooth' });
-      setTimeout(function () { isSyncing = false; }, 150);
+      // 'instant' positioning (opening the preview, switching files) must jump —
+      // smooth animation there reads as the preview drifting on its own.
+      scrollContainer.scrollTo({ top: want, behavior: instant ? 'auto' : 'smooth' });
     }
   }
 
@@ -268,7 +271,7 @@
         render(msg.content);
         break;
       case 'scroll-sync':
-        requestAnimationFrame(function () { scrollToLine(msg.topLine); });
+        requestAnimationFrame(function () { scrollToLine(msg.topLine, msg.instant); });
         break;
       case 'set-theme':
         setTheme(msg.theme);

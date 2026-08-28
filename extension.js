@@ -175,7 +175,9 @@ class PreviewPanel {
           this.update(editor.document.getText());
           setTimeout(() => {
             const topRange = editor.visibleRanges[0];
-            if (topRange) this.scrollSync(topRange.start.line);
+            // instant: the very first positioning must JUMP, not smooth-scroll —
+            // a smooth animation on open looks like the preview drifting by itself.
+            if (topRange) this.scrollSync(topRange.start.line, true);
           }, 300);
         }
       } else if (msg.type === 'toggle-task') {
@@ -207,9 +209,9 @@ class PreviewPanel {
     this.panel.webview.postMessage({ type: 'update', content });
   }
 
-  scrollSync(topLine) {
+  scrollSync(topLine, instant = false) {
     if (!this.panel) return;
-    this.panel.webview.postMessage({ type: 'scroll-sync', topLine });
+    this.panel.webview.postMessage({ type: 'scroll-sync', topLine, instant });
   }
 
   setTheme(theme) {
@@ -301,10 +303,10 @@ function activate(context) {
 
   // Scroll sync helper
   let scrollTimeout = null;
-  function doScrollSync(editor) {
+  function doScrollSync(editor, instant = false) {
     if (!PreviewPanel.instance || !editor) return;
     const r = editor.visibleRanges[0];
-    if (r) PreviewPanel.instance.scrollSync(r.start.line);
+    if (r) PreviewPanel.instance.scrollSync(r.start.line, instant);
   }
 
   // Open preview
@@ -317,6 +319,12 @@ function activate(context) {
         // files must not push themselves into this preview.
         preview.boundUri = editor.document.uri.toString();
         preview.update(editor.document.getText());
+        // If the panel is FRESH this post is dropped (webview not ready yet) and
+        // the 'ready' handshake sends its own sync. If the panel is being REUSED
+        // (createOrShow just revealed it), 'ready' fired long ago and NOTHING
+        // would ever re-sync: the revealed preview kept its old scroll position
+        // — "打开预览时滚动没有同步". Send the initial sync here too.
+        setTimeout(() => doScrollSync(editor, true), 350);
       }
     })
   );
@@ -353,6 +361,10 @@ function activate(context) {
       if (editor && editor.document.languageId === 'markdown' && PreviewPanel.instance) {
         PreviewPanel.instance.boundUri = editor.document.uri.toString();
         PreviewPanel.instance.update(editor.document.getText());
+        // Also re-anchor the scroll: the re-render swaps innerHTML while body
+        // keeps its old (now-clamped) scrollTop, so switching to a file freshly
+        // opened mid-document left the preview stranded. ("切换文件后没同步")
+        setTimeout(() => doScrollSync(editor, true), 150);
       }
     })
   );
