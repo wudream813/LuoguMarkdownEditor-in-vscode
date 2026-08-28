@@ -219,14 +219,10 @@ function lintLuoguStyle(text) {
     }
 
     // ── §1.1 句末必须有标点 ──
-    // 段落感知：软换行的段落跨多行，只有段落的最后一行（下一行为空/结构行/EOF）
-    // 才判定句末；列表项独立成句，逐项判定。
-    const isListItem = /^\s*(?:[-*+]|\d{1,6}[.、)】])\s/.test(oline);
-    const nextRaw = ln + 1 < origLines.length ? origLines[ln + 1] : '';
-    const nextTrim = nextRaw.trim();
-    const paragraphEnds = isListItem || nextTrim === '' ||
-      /^(#{1,6}\s|```|~~~|\$\$|:::|[|>]|\s*[-*+]\s|\s*\d{1,6}[.、)】]\s)/.test(nextTrim);
-    if (!hm && paragraphEnds && oline.trim().length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(oline)) {
+    // 逐行判定：洛谷题解常见「一句一行」，每一行都应是完整句子；以 「，、：（」
+    // 等延续性标点结尾的行自然被跳过（软换行的段落不会被误伤——拦截的是无标点
+    // 结尾的行）。仅跳过标题/过短行/表格/HTML/折叠头。
+    if (!hm && oline.trim().length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(oline)) {
       const lastVisible = mline.replace(/\s+$/, '').slice(-1);
       const hasCJK = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(mline);
       if (hasCJK && lastVisible && SENTENCE_END.indexOf(lastVisible) < 0) {
@@ -517,14 +513,9 @@ function autoFixLuoguStyle(text) {
     line = line.replace(/(?<=[一-鿿㐀-䶿豈-﫿])(?=[A-Za-z0-9])/g, ' ')
                .replace(/(?<=[A-Za-z0-9])(?=[一-鿿㐀-䶿豈-﫿])/g, ' ');
 
-    // ── §1.1 句末补充句号（与 lint 同条件——段落感知；硬换行两个空格保留在句号之后）──
+    // ── §1.1 句末补充句号（逐行判定，同 lint；硬换行两个空格保留在句号之后）──
     const hm = /^(#{1,6})\s/.test(line);
-    const isListItem = /^\s*(?:[-*+]|\d{1,6}[.、)】])\s/.test(oline);
-    const nextRaw2 = ln + 1 < origLines.length ? origLines[ln + 1] : '';
-    const nextTrim2 = nextRaw2.trim();
-    const paragraphEnds = isListItem || nextTrim2 === '' ||
-      /^(#{1,6}\s|```|~~~|\$\$|:::|[|>]|\s*[-*+]\s|\s*\d{1,6}[.、)】]\s)/.test(nextTrim2);
-    if (!hm && paragraphEnds && trimmed.length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(line)) {
+    if (!hm && trimmed.length >= 4 && !/^\s*[|>]|^\s*<|^:::/.test(line)) {
       const hardBreak = /  $/.test(line);
       const base = line.replace(/[ \t]+$/, '');
       const last = base.slice(-1);
