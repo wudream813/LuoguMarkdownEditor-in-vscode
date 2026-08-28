@@ -4,6 +4,9 @@
 
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
+const { buildStandaloneHtml } = require('./export-render');
+const { lintLuoguMarkdown } = require('./lint');
 
 // Full preset template library (exported for both web and Node — shared file).
 // Previously dead code: the sidebar inserted the tiny hard-coded fallbacks below
@@ -118,7 +121,8 @@ class TemplatesProvider {
     if (element.label === '工具') return [
       new ToolboxItem('一键排版修复', 'luogu-editor.autoFixSpacing', 'zap'),
       new ToolboxItem('复制 Markdown 源码', 'luogu-editor.copyMarkdown', 'copy'),
-      new ToolboxItem('切换亮/暗主题', 'luogu-editor.toggleTheme', 'color-mode'),
+      new ToolboxItem('导出 HTML', 'luogu-editor.exportHtml', 'export'),
+      new ToolboxItem('导出 PDF', 'luogu-editor.exportPdf', 'file-pdf'),
     ];
     return [];
   }
@@ -330,6 +334,39 @@ function activate(context) {
   vscode.window.registerTreeDataProvider('luogu-editor.toolbox', new ToolboxProvider());
   vscode.window.registerTreeDataProvider('luogu-editor.templates', new TemplatesProvider());
 
+  // ── 语法检查 → VSCode 问题面板（v1.1.1）──
+  // luogu-parser 本身永不报错（宽容渲染），结构性错误只能由独立的 lint 层提示。
+  const diagnostics = vscode.languages.createDiagnosticCollection('luogu-markdown');
+  context.subscriptions.push(diagnostics);
+  let lintTimer = null;
+
+  function lintDocument(doc) {
+    if (!doc || doc.languageId !== 'markdown') return;
+    const issues = lintLuoguMarkdown(doc.getText());
+    const diags = [];
+    for (const it of issues) {
+      const line = Math.min(Math.max(0, it.line), doc.lineCount - 1);
+      diags.push(new vscode.Diagnostic(
+        doc.lineAt(line).range,
+        it.message,
+        it.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning
+      ));
+    }
+    diagnostics.set(doc.uri, diags);
+  }
+
+  const scheduleLint = (doc) => {
+    if (!doc || doc.languageId !== 'markdown') return;
+    clearTimeout(lintTimer);
+    lintTimer = setTimeout(() => lintDocument(doc), 400);
+  };
+
+  context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(lintDocument));
+  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e) => scheduleLint(e.document)));
+  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((doc) => diagnostics.delete(doc.uri)));
+  // 激活时已打开的所有 markdown 文档先过一遍
+  for (const doc of vscode.workspace.textDocuments) lintDocument(doc);
+
   // Scroll sync helper
   let scrollTimeout = null;
   function doScrollSync(editor, instant = false) {
@@ -504,6 +541,75 @@ function activate(context) {
     if (text !== fixed) { replaceAllContent(fixed); vscode.window.showInformationMessage('排版修复完成'); }
     else vscode.window.showInformationMessage('排版已符合规范');
   });
+  reg('luogu-editor.exportHtml', () => exportDocument('html'));
+  reg('luogu-editor.exportPdf', () => exportDocument('pdf'));
+}
+
+/**
+ * 导出当前 Markdown 为自包含 HTML（v1.1.1）。
+ * mode='html'：直接导出 .html；mode='pdf'：导出带打印样式 + 自动唤起打印对话框的
+ * HTML 并在默认浏览器打开（VSCode 扩展无头打印 API 缺失，浏览器「打印 → 另存为 PDF」
+ * 是唯一不引入数百 MB Chromium 依赖的可行路径）。
+ */
+async function exportDocument(mode) {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'markdown') {
+    vscode.window.showWarningMessage('请先打开一个 Markdown 文件');
+    return;
+  }
+  if (editor.document.isUntitled) {
+    vscode.window.showWarningMessage('请先保存文件再导出');
+    return;
+  }
+  const srcPath = editor.document.uri.fsPath;
+  const dir = path.dirname(srcPath);
+  const base = path.basename(srcPath).replace(/\.[^.]+$/, '');
+  const target = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.file(path.join(dir, mode === 'html' ? `${base}.html` : `${base}-print.html`)),
+    filters: { 'HTML 文件': ['html'] },
+    title: mode === 'html' ? '导出 HTML' : '导出 PDF（生成打印用 HTML）',
+  });
+  if (!target) return;
+
+  try {
+    const assetsRoot = path.join(__dirname, 'media');
+    const html = buildStandaloneHtml(editor.document.getText(), {
+      title: base,
+      assetsRoot,
+      forPrint: mode === 'pdf',
+    });
+    fs.writeFileSync(target.fsPath, html, 'utf8');
+
+    // katex.min.css 以相对路径引用 fonts/ —— 把字体目录复制到导出目录，
+    // 否则数学公式会退化为默认衬线字体（内容仍可读）。
+    let fontsNote = '';
+    const fontsSrc = path.join(assetsRoot, 'katex', 'fonts');
+    if (fs.existsSync(fontsSrc)) {
+      const fontsDst = path.join(path.dirname(target.fsPath), 'fonts');
+      if (!fs.existsSync(fontsDst)) {
+        fs.cpSync(fontsSrc, fontsDst, { recursive: true });
+        fontsNote = '（已附带 fonts/ 字体目录，移动 HTML 时请一起移动）';
+      } else {
+        fontsNote = '（复用已有 fonts/ 字体目录）';
+      }
+    }
+
+    if (mode === 'html') {
+      const pick = await vscode.window.showInformationMessage(
+        `已导出 HTML${fontsNote}`, '在文件夹中显示', '直接打开'
+      );
+      if (pick === '在文件夹中显示') {
+        vscode.commands.executeCommand('revealFileInOS', target);
+      } else if (pick === '直接打开') {
+        vscode.env.openExternal(target);
+      }
+    } else {
+      await vscode.env.openExternal(target);
+      vscode.window.showInformationMessage('已在浏览器打开打印页面：在打印对话框选择「另存为 PDF」即可');
+    }
+  } catch (e) {
+    vscode.window.showErrorMessage(`导出失败：${e.message}`);
+  }
 }
 
 async function insertCallout(type) {

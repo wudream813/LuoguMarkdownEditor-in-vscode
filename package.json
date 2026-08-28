@@ -2,7 +2,7 @@
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
   "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "wudream813",
   "engines": {
     "vscode": "^1.75.0"
@@ -190,6 +190,16 @@
       {
         "command": "luogu-editor.toggleTheme",
         "title": "Luogu Markdown: 切换亮/暗主题"
+      },
+      {
+        "command": "luogu-editor.exportHtml",
+        "title": "Luogu Markdown: 导出 HTML",
+        "icon": "$(export)"
+      },
+      {
+        "command": "luogu-editor.exportPdf",
+        "title": "Luogu Markdown: 导出 PDF（经浏览器打印）",
+        "icon": "$(file-pdf)"
       }
     ],
     "menus": {
