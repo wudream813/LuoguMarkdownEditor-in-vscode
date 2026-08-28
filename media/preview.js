@@ -69,7 +69,12 @@
       iframe.setAttribute('frameborder', 'no');
       iframe.setAttribute('framespacing', '0');
       iframe.setAttribute('allowfullscreen', 'true');
-      iframe.setAttribute('referrerpolicy', 'no-referrer');
+      // NOTE: deliberately NO referrerpolicy attribute. It propagates to every
+      // request the player makes INSIDE the iframe: 'no-referrer' empties the
+      // Referer of video CDN requests (upos-*.bilivideo.com), which Bilibili's
+      // hotlink protection rejects with 403 — metadata loads but no picture.
+      // With the attribute omitted the player's own origin (player.bilibili.com)
+      // is sent and the CDN lets the stream through.
       // allow-same-origin + allow-forms are REQUIRED: without same-origin the
       // player runs as an opaque origin — localStorage/cookies are blocked and
       // Bilibili's player init crashes into a black "video won't load" screen.

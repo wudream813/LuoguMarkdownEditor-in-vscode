@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.15] - 2026-08-28
+
+### 修复
+
+- **Bilibili 视频能加载播放器但出不来画面**：移除 iframe 的 `referrerpolicy="no-referrer"`。该属性会传播给播放器内部的所有请求，使视频流请求（`upos-*.bilivideo.com`）Referer 为空，被 CDN 防盗链 403 拒绝——元信息（标题/时长）能加载但画面加载不出。移除后播放器以自身源 `player.bilibili.com` 作为 Referer，CDN 放行视频流
+
 ## [1.0.14] - 2026-08-28
 
 ### 修复
