@@ -190,7 +190,8 @@
 
       // Stage 1: Math placeholder extraction
       const mathPlaceholders = [];
-      let text = this.extractMath(markdown, mathPlaceholders);
+      // 防御：非字符串输入统一为空串，避免外部调用方炸主流程
+      let text = this.extractMath(typeof markdown === 'string' ? markdown : '', mathPlaceholders);
 
       // Stage 2: Parse container blocks and special Luogu elements
       const lines = text.split(/\r?\n/);
@@ -259,7 +260,7 @@
       this._footnotes.clear();
       this._fnRefOrder = [];
       this._fnRefTokens = [];
-      text = text.replace(/^[ ]{0,3}\[\^([^\]\s]+)\]:[ \t]*(.*?)((?:\n(?:[ ]{4}|\t).*)*)/gm, (m, fid, first, cont) => {
+      text = text.replace(/^[ ]{0,3}\[\^([^\]\s]+)\]:[ \t]*(.*)((?:\n(?:[ ]{4}|\t).*)*)/gm, (m, fid, first, cont) => {
         const body = (first + (cont ? cont.replace(/\n(?:[ ]{4}|\t)/g, '\n') : '')).trim();
         this._footnotes.set(fid, body);
         return '\n'.repeat(m.split('\n').length - 1);
@@ -1282,8 +1283,8 @@
 
       // Strikethrough: ~~text~~
       s = s.replace(/~~([^~\s][^~]*?[^~\s]|[^~\s])~~/g, '<del>$1</del>');
-      // Strikethrough: ~text~（GFM 允许单波浪线；洛谷 remark-gfm 同样渲染 <del>）
-      s = s.replace(/(^|[\s(（【「《"'‘“])~([^~\s][^~\n]*?[^~\s]|[^~\s])~(?=[\s)\]】」》"'’”，。；：、.,;:!?！？]|$)/g, '$1<del>$2</del>');
+      // Strikethrough: ~text~（GFM 允许单波浪线；洛谷 remark-gfm 紧贴字母/CJK 同样渲染 <del>）
+      s = s.replace(/(?<![~])~([^~\s](?:[^~\n]*[^~\s])?)~(?![~])/g, '<del>$1</del>');
 
       // 6-9. Restore every protected token in ONE pass.
       //
@@ -1320,7 +1321,7 @@
       }
 
       if (tokenMap.size > 0) {
-        const TOKEN_RE = /LUOGU(?:MEDIATOKEN|LINKTOKEN|ESCAPETOKEN|INLINETOKEN)\d+END/g;
+        const TOKEN_RE = /LUOGU(?:MEDIATOKEN|LINKTOKEN|ESCAPETOKEN|INLINETOKEN|FNREFTOKEN)\d+END/g;
         // Bounded loop: media/link markup can embed escape tokens, so allow a few
         // sweeps, but never spin forever on a self-referential payload.
         for (let pass = 0; pass < 4 && TOKEN_RE.test(s); pass++) {
