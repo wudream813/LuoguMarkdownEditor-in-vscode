@@ -2142,3 +2142,31 @@ code[class*="language-"] {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Footnotes (GFM) ─────────────────────────────── */
+.luogu-footnotes {
+  margin-top: 24px;
+  font-size: 0.85em;
+}
+.luogu-footnotes-hr {
+  border: none;
+  border-top: 1px solid #d0d7de;
+}
+[data-theme="dark"] .luogu-footnotes-hr {
+  border-top-color: rgba(255, 255, 255, 0.2);
+}
+.luogu-footnotes ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+.luogu-footnotes li {
+  margin-bottom: 6px;
+}
+.luogu-footnote-ref a {
+  text-decoration: none;
+  padding: 0 2px;
+}
+.luogu-footnote-backref {
+  margin-left: 6px;
+  text-decoration: none;
+}

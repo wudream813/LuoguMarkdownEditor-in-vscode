@@ -196,6 +196,17 @@
       const lines = text.split(/\r?\n/);
       let html = this.parseBlocks(lines);
 
+      // Stage 2.5: Footnotes —— 按首个引用出现次序编号集中呈现；未被引用的定义不渲染
+      if (this._fnRefOrder && this._fnRefOrder.length > 0) {
+        let fnHtml = '<section class="luogu-footnotes"><hr class="luogu-footnotes-hr" /><ol>';
+        this._fnRefOrder.forEach((fid, i) => {
+          const body = this._footnotes.get(fid) || '';
+          fnHtml += `<li id="luogu-fn-${i + 1}">${this.renderInline(body)} <a href="#luogu-fnref-${i + 1}" class="luogu-footnote-backref" aria-label="返回引用">↩</a></li>`;
+        });
+        fnHtml += '</ol></section>';
+        html += fnHtml;
+      }
+
       // Stage 3: Restore math placeholders with KaTeX
       html = this.restoreMath(html, mathPlaceholders);
 
@@ -243,15 +254,30 @@
         return (prefix || '') + id;
       };
 
+      // Footnote definitions (GFM)：以等长空行占位替换，保证后续行号不变
+      this._footnotes = this._footnotes || new Map();
+      this._footnotes.clear();
+      this._fnRefOrder = [];
+      this._fnRefTokens = [];
+      text = text.replace(/^[ ]{0,3}\[\^([^\]\s]+)\]:[ \t]*(.*?)((?:\n(?:[ ]{4}|\t).*)*)/gm, (m, fid, first, cont) => {
+        const body = (first + (cont ? cont.replace(/\n(?:[ ]{4}|\t)/g, '\n') : '')).trim();
+        this._footnotes.set(fid, body);
+        return '\n'.repeat(m.split('\n').length - 1);
+      });
+
       // 1) $$ 独占行 ……（可含空行）…… $$ 独占行
       text = text.replace(/(^|\n)[ \t]*\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$[ \t]*(?=\n|$)/g,
         (match, prefix, formula) => stashDisplay(match.slice(prefix.length), formula, prefix));
       // 2) $$x$$ 独占单行
       text = text.replace(/(^|\n)[ \t]*\$\$([^\n]*?\S)\$\$[ \t]*(?=\n|$)/g,
         (match, prefix, formula) => stashDisplay(match.slice(prefix.length), formula, prefix));
-      // 3) 段内 $$（不跨空行）
+      // 3) 段内 $$（不跨空行）——洛谷 remark-math 将段内 $$ 视为行内公式
       text = text.replace(/\$\$((?:(?!\n[ \t]*\n)[\s\S])+?)\$\$/g,
-        (match, formula) => stashDisplay(match, formula));
+        (match, formula) => {
+          const id = `LUOGUMATHINLINE${mathIdx++}END`;
+          store.push({ id, type: 'inline', formula: formula.trim() });
+          return id;
+        });
 
       // Inline math: $ ... $
       // Must not match \$ (escaped) or empty $$, and should not span across empty lines.
@@ -808,7 +834,7 @@
         if (leftColon && rightColon) return 'center';
         if (rightColon) return 'right';
         if (leftColon) return 'left';
-        return 'left';
+        return null; // 与 remark 一致：无对齐标记即不输出对齐属性
       });
 
       const bodyRawRows = parsedRows.slice(2);
@@ -822,7 +848,7 @@
         for (let c = 0; c < numCols; c++) {
           row.push({
             text: rawRow[c] !== undefined ? rawRow[c] : '',
-            align: colAligns[c] || 'left',
+            align: colAligns[c] || null,
             rowspan: 1,
             colspan: 1,
             isMerged: false,
@@ -1198,6 +1224,33 @@
         return id;
       });
 
+      // GFM autolink literals：裸 https?://… 与 www.…（无需尖括号）。
+      // 代码/数学/图片/标准链接此时已是占位符，天然安全；末尾标点按 GFM 剥离。
+      s = s.replace(/(^|[\s(（【「《"'])((?:https?:\/\/|www\.)[^\s<]+)/g, (m, pre, raw) => {
+        let u = raw, trail = '';
+        while (/[.,;:!?'"*_~，。！？；：、）】」》]$/.test(u)) { trail = u.slice(-1) + trail; u = u.slice(0, -1); }
+        while (u.endsWith(')')) {
+          const opens = (u.match(/\(/g) || []).length;
+          const closes = (u.match(/\)/g) || []).length;
+          if (closes > opens) { trail = ')' + trail; u = u.slice(0, -1); } else break;
+        }
+        if (!u) return m;
+        const href = /^https?:\/\//.test(u) ? u : 'http://' + u;
+        const id = `LUOGULINKTOKEN${linkTokens.length}END`;
+        linkTokens.push(`<a href="${escapeHtml(sanitizeUrl(href))}" target="_blank" rel="noopener noreferrer" class="luogu-link">${escapeHtml(u)}</a>`);
+        return pre + id + trail;
+      });
+
+      // Footnote refs [^id]（GFM；无对应定义时按字面文本渲染）
+      s = s.replace(/\[\^([^\]\s]+)\]/g, (m, fid) => {
+        if (!this._footnotes || !this._fnRefOrder || !this._footnotes.has(fid)) return m;
+        let num = this._fnRefOrder.indexOf(fid);
+        if (num < 0) { this._fnRefOrder.push(fid); num = this._fnRefOrder.length - 1; }
+        const id = `LUOGUFNREFTOKEN${this._fnRefTokens.length}END`;
+        this._fnRefTokens.push(`<sup class="luogu-footnote-ref" id="luogu-fnref-${num + 1}"><a href="#luogu-fn-${num + 1}">[${num + 1}]</a></sup>`);
+        return id;
+      });
+
       // (Standard links are handled by the balanced-bracket scanner above.)
 
       // 4.5. Neutralise any remaining raw HTML.
@@ -1229,6 +1282,8 @@
 
       // Strikethrough: ~~text~~
       s = s.replace(/~~([^~\s][^~]*?[^~\s]|[^~\s])~~/g, '<del>$1</del>');
+      // Strikethrough: ~text~（GFM 允许单波浪线；洛谷 remark-gfm 同样渲染 <del>）
+      s = s.replace(/(^|[\s(（【「《"'‘“])~([^~\s][^~\n]*?[^~\s]|[^~\s])~(?=[\s)\]】」》"'’”，。；：、.,;:!?！？]|$)/g, '$1<del>$2</del>');
 
       // 6-9. Restore every protected token in ONE pass.
       //
@@ -1248,6 +1303,11 @@
       }
       for (let i = 0; i < linkTokens.length; i++) {
         tokenMap.set(`LUOGULINKTOKEN${i}END`, linkTokens[i]);
+      }
+      if (this._fnRefTokens) {
+        for (let i = 0; i < this._fnRefTokens.length; i++) {
+          tokenMap.set(`LUOGUFNREFTOKEN${i}END`, this._fnRefTokens[i]);
+        }
       }
       for (let i = 0; i < escapes.length; i++) {
         tokenMap.set(`LUOGUESCAPETOKEN${i}END`, escapes[i]);
