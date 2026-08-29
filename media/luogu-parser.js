@@ -227,16 +227,31 @@
         return id;
       });
 
-      // Display math: $$ ... $$ (can be multi-line or single line)
+      // Display math — 与洛谷（markdown-it + katex）对齐的三级匹配，缺一不可：
+      //   1) BLOCK：开/闭 $$ 各自独占一行，中间允许空行（markdown-it 块级规则可跨段落）；
+      //   2) $$x$$ 整行单行形式；
+      //   3) INLINE：段落内 $$...$$，绝不跨越空行（同段内可跨单个换行）。
+      // 此前单条 /\$\$([\s\S]*?)\$\$/ 会把「文字 $$ s\n\n$$」错配为跨空行公式——
+      // 而洛谷的块/行内规则分别将其呈现为字面文本「文字 $$ s」。
       let mathIdx = 0;
-      text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+      const stashDisplay = (spanText, formula, prefix) => {
         const id = `LUOGUMATHBLOCK${mathIdx++}END`;
         store.push({ id, type: 'display', formula: formula.trim() });
         // Same reasoning as fenced code: remember the real span so line numbers stay
         // faithful even though the placeholder collapses to one line.
-        this._tokenLines.set(id, match.split('\n').length);
-        return id;
-      });
+        this._tokenLines.set(id, spanText.split('\n').length);
+        return (prefix || '') + id;
+      };
+
+      // 1) $$ 独占行 ……（可含空行）…… $$ 独占行
+      text = text.replace(/(^|\n)[ \t]*\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$[ \t]*(?=\n|$)/g,
+        (match, prefix, formula) => stashDisplay(match.slice(prefix.length), formula, prefix));
+      // 2) $$x$$ 独占单行
+      text = text.replace(/(^|\n)[ \t]*\$\$([^\n]*?\S)\$\$[ \t]*(?=\n|$)/g,
+        (match, prefix, formula) => stashDisplay(match.slice(prefix.length), formula, prefix));
+      // 3) 段内 $$（不跨空行）
+      text = text.replace(/\$\$((?:(?!\n[ \t]*\n)[\s\S])+?)\$\$/g,
+        (match, formula) => stashDisplay(match, formula));
 
       // Inline math: $ ... $
       // Must not match \$ (escaped) or empty $$, and should not span across empty lines.
