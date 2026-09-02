@@ -65,6 +65,22 @@
 | 链接/媒体 | `[text](url)`、`![](bilibili:BV号)`、任务列表 |
 | 工具 | 一键排版修复、备份恢复 |
 
+## 快捷键
+
+编辑 Markdown 时可用与洛谷现行编辑器完全一致的快捷键（Mod = 非 mac `Ctrl` / macOS `⌘`）：
+
+| 操作 | 快捷键 |
+|------|--------|
+| 提升/降低标题等级 | `Mod+Shift+↑` / `Mod+Shift+↓` |
+| 加粗 / 斜体 / 删除线 | `Mod+B` / `Mod+I` / `Mod+D` |
+| 数学公式（inline） | `Mod+M` |
+| 水平线 | `Mod+Shift+H` |
+| 插入链接 / 图片 | `Mod+Shift+L` / `Mod+Shift+I` |
+| 插入引用 / 行内代码 / 表格 | `Mod+Shift+Q` / `Mod+Shift+1` / `Mod+Shift+2` |
+| 无序 / 有序 / 任务列表 | `Mod+Shift+7` / `Mod+Shift+8` / `Mod+Shift+9` |
+
+选中文本时，引用/列表/任务列表命令会把每一行转为对应行，而不是插入模板。
+
 ## 从源码开发
 
 ```bash

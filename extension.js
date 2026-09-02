@@ -319,6 +319,45 @@ async function wrapSelectionOrInsert(prefix, suffix, placeholder) {
   });
 }
 
+// 洛谷编辑器快捷键 §（article/70w8j2pj）：Mod+Shift+↑/↓ 提升/降低标题行等级。
+// 作用于选区覆盖的所有标题行；提升 = 删一个 #（# 已到顶则不动），降低 = 加一个 #（≤6）。
+async function adjustHeading(delta) {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'markdown') return;
+  const doc = editor.document, sel = editor.selection;
+  await editor.edit((eb) => {
+    for (let ln = sel.start.line; ln <= sel.end.line; ln++) {
+      const line = doc.lineAt(ln);
+      const m = line.text.match(/^(\s{0,3})(#{1,6})(\s|$)/);
+      if (!m) continue;
+      const levels = m[2].length + delta;
+      if (levels < 1 || levels > 6) continue;
+      const start = line.range.start;
+      const range = new vscode.Range(start, start.translate(0, m[0].length));
+      eb.replace(range, m[1] + '#'.repeat(levels) + m[3]);
+    }
+  });
+}
+
+// 选区行整体加前缀（引用/列表）；无选区时插入模板。gen(i) 为第 i 行生成前缀。
+async function applyLinePrefix(gen, fallbackTemplate) {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
+  const doc = editor.document, sel = editor.selection;
+  const hasSelection = !(sel.start.line === sel.end.line && sel.start.character === sel.end.character);
+  if (!hasSelection) {
+    await insertTextAtCursor(fallbackTemplate);
+    return;
+  }
+  await editor.edit((eb) => {
+    for (let ln = sel.start.line, i = 0; ln <= sel.end.line; ln++, i++) {
+      const line = doc.lineAt(ln);
+      if (!line.text.trim()) continue;
+      eb.insert(line.range.start, gen(i));
+    }
+  });
+}
+
 async function replaceAllContent(text) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
@@ -515,7 +554,7 @@ function activate(context) {
       insertTextAtCursor(`\n\`\`\`${lang} line-numbers\n${comment}\n\`\`\`\n`);
     }
   });
-  reg('luogu-editor.insertQuote', () => insertTextAtCursor('\n> 引用内容\n'));
+  reg('luogu-editor.insertQuote', () => applyLinePrefix(() => '> ', '\n> 引用内容\n'));
   reg('luogu-editor.insertMathInline', () => wrapSelectionOrInsert('$', '$', 'x'));
   reg('luogu-editor.insertMathBlock', () => insertTextAtCursor('\n$$\n\\sum_{i=1}^n a_i\n$$\n'));
   reg('luogu-editor.insertCalloutInfo', () => insertCallout('info'));
@@ -538,7 +577,11 @@ function activate(context) {
     const bv = await vscode.window.showInputBox({ prompt: 'BV/AV 号', placeHolder: 'BV1GJ411x7h7' });
     if (bv) insertTextAtCursor(`\n![](bilibili:${bv})\n`);
   });
-  reg('luogu-editor.insertTaskList', () => insertTextAtCursor('\n- [ ] 任务\n- [x] 已完成\n'));
+  reg('luogu-editor.insertTaskList', () => applyLinePrefix(() => '- [ ] ', '\n- [ ] 任务\n- [x] 已完成\n'));
+  reg('luogu-editor.insertUList', () => applyLinePrefix(() => '- ', '\n- 列表项 1\n- 列表项 2\n'));
+  reg('luogu-editor.insertOList', () => applyLinePrefix((i) => `${i + 1}. `, '\n1. 列表项 1\n2. 列表项 2\n'));
+  reg('luogu-editor.headingPromote', () => adjustHeading(-1));
+  reg('luogu-editor.headingDemote', () => adjustHeading(+1));
   reg('luogu-editor.insertHR', () => insertTextAtCursor('\n---\n'));
   reg('luogu-editor.insertTemplateDemo', () => insertTemplateFromFile('demo'));
   reg('luogu-editor.insertTemplateSolution', () => insertTemplateFromFile('solution'));

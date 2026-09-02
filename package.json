@@ -2,7 +2,7 @@
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
   "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "publisher": "wudream",
   "engines": {
     "vscode": "^1.75.0"
@@ -200,6 +200,22 @@
         "command": "luogu-editor.exportPdf",
         "title": "Luogu Markdown: 导出 PDF（先导出 HTML，再用浏览器打印导出）",
         "icon": "$(file-pdf)"
+      },
+      {
+        "command": "luogu-editor.insertUList",
+        "title": "Luogu Markdown: 插入无序列表"
+      },
+      {
+        "command": "luogu-editor.insertOList",
+        "title": "Luogu Markdown: 插入有序列表"
+      },
+      {
+        "command": "luogu-editor.headingPromote",
+        "title": "Luogu Markdown: 提升标题等级"
+      },
+      {
+        "command": "luogu-editor.headingDemote",
+        "title": "Luogu Markdown: 降低标题等级"
       }
     ],
     "menus": {
@@ -237,7 +253,99 @@
           "description": "编辑时自动同步预览"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "luogu-editor.headingPromote",
+        "key": "ctrl+shift+up",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+up"
+      },
+      {
+        "command": "luogu-editor.headingDemote",
+        "key": "ctrl+shift+down",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+down"
+      },
+      {
+        "command": "luogu-editor.insertHR",
+        "key": "ctrl+shift+h",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+h"
+      },
+      {
+        "command": "luogu-editor.insertBold",
+        "key": "ctrl+b",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+b"
+      },
+      {
+        "command": "luogu-editor.insertItalic",
+        "key": "ctrl+i",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+i"
+      },
+      {
+        "command": "luogu-editor.insertStrikethrough",
+        "key": "ctrl+d",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+d"
+      },
+      {
+        "command": "luogu-editor.insertMathInline",
+        "key": "ctrl+m",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+m"
+      },
+      {
+        "command": "luogu-editor.insertLink",
+        "key": "ctrl+shift+l",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+l"
+      },
+      {
+        "command": "luogu-editor.insertImage",
+        "key": "ctrl+shift+i",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+i"
+      },
+      {
+        "command": "luogu-editor.insertQuote",
+        "key": "ctrl+shift+q",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+q"
+      },
+      {
+        "command": "luogu-editor.insertInlineCode",
+        "key": "ctrl+shift+1",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+1"
+      },
+      {
+        "command": "luogu-editor.insertTable",
+        "key": "ctrl+shift+2",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+2"
+      },
+      {
+        "command": "luogu-editor.insertUList",
+        "key": "ctrl+shift+7",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+7"
+      },
+      {
+        "command": "luogu-editor.insertOList",
+        "key": "ctrl+shift+8",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+8"
+      },
+      {
+        "command": "luogu-editor.insertTaskList",
+        "key": "ctrl+shift+9",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown",
+        "mac": "cmd+shift+9"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "echo 'Ready to publish'"

@@ -1229,7 +1229,9 @@
       // 代码/数学/图片/标准链接此时已是占位符，天然安全；末尾标点按 GFM 剥离。
       s = s.replace(/(^|[\s(（【「《"'])((?:https?:\/\/|www\.)[^\s<]+)/g, (m, pre, raw) => {
         let u = raw, trail = '';
-        while (/[.,;:!?'"*_~，。！？；：、）】」》]$/.test(u)) { trail = u.slice(-1) + trail; u = u.slice(0, -1); }
+        // 注意：按 GFM spec（remark-gfm 实测）URL 字面量贯穿到下一个空白——中文标点/汉字
+        // 一律吞进链接，仅剥离 ASCII 尾随标点（与洛谷渲染一致，NOT 更友好的中文边界）
+        while (/[.,;:!?'"*_~]$/.test(u)) { trail = u.slice(-1) + trail; u = u.slice(0, -1); }
         while (u.endsWith(')')) {
           const opens = (u.match(/\(/g) || []).length;
           const closes = (u.match(/\)/g) || []).length;

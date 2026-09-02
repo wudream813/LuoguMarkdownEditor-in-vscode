@@ -1,4 +1,18 @@
 # Changelog
+## [1.2.12] - 2026-08-30
+
+### 新增
+
+- **快捷键（与洛谷手册完全对齐）**：标题升格/降格 `Mod+Shift+↑/↓`、加粗/斜体/删除线 `Mod+B/I/D`、行内公式 `Mod+M`、水平线 `Mod+Shift+H`、链接/图片 `Mod+Shift+L/I`、引用/行内代码/表格 `Mod+Shift+Q/1/2`、无序/有序/任务列表 `Mod+Shift+7/8/9`，均仅在 Markdown 编辑焦点形生生效；引用与列表键对选区逐行转换。
+
+### 修复
+
+- **GFM 裸 URL 尾置中文标点并入链接**（严格对齐洛谷）：`见 https://x.com/b。`、`（https://x.com）`、`见 www.a.com，去吧` 实测 remark-gfm 会把中文标点/汉字并入 URL 字面量；此前实现做了「中文友好地」剥离，与洛谷渲染不符。现已严格对齐。一并追加了 3 条差分语料 + 3 项对抗自检锁死。
+
+### 定性说明
+
+- 用户上报的「`$\mathcal{O}(n \log n)$ → $\ \log$」「`$\{$ → $LUOGUTOKENESC0END$」两类 breakage 来自旧 installation 里已被删除的 `media/luogu-linter.js`（仅存在于原首版 git 历史）；现行 v1.2.x 修复器对两类输入幂等不破坏，「test-bugsweep 一键排版幂等锁」已新增 4 项按 line 盾守护。
+
 ## [1.2.11] - 2026-08-30
 
 ### 文档
