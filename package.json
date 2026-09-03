@@ -2,7 +2,7 @@
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
   "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
-  "version": "1.2.13",
+  "version": "1.2.14",
   "publisher": "wudream",
   "engines": {
     "vscode": "^1.75.0"

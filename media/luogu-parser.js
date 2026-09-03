@@ -432,7 +432,8 @@
 
         // 2. Cute table indicator: ::cute-table / {three}（三线表）/ {tuack}（竞赛风格）
         //    / {tuack=N[,M…]}（在第 N/M 列后附加粗竖线，手册 70w8j2pj 表格工具参数）
-        const cuteTableMatch = line.trim().match(/^::cute-table(?:\{(.*?)\})?\s*$/i);
+        //    手册约定叶子 directive 恰好两冒号；::: 视作手误的 tolerated 别名（超集）
+        const cuteTableMatch = line.trim().match(/^:{2,}cute-table(?:\{(.*?)\})?\s*$/i);
         if (cuteTableMatch) {
           const rawParam = (cuteTableMatch[1] || '').trim().toLowerCase();
           const param = rawParam.replace(/\s+/g, '');
@@ -476,17 +477,35 @@
 
           // Collect inner lines until matching closing colon line
           const innerLines = [];
+          let closedLine = null;
           i++;
 
           while (i < n) {
             const curLine = lines[i];
             const closeMatch = curLine.match(/^(:{3,})\s*$/);
             if (closeMatch && closeMatch[1].length === colonLevel) {
+              closedLine = curLine.trim();
               i++;
               break;
             }
             innerLines.push(curLine);
             i++;
+          }
+
+          // 未识别的 directive 容器按 remark-directive 默认行为字面渲染
+          // （洛谷未知容器同义字面；此前一律掉为 info 折叠框会吞掉后续段落）。
+          // 已知集严格 = 手册 70w8j2pj 所列容器（cute-table 为叶子 directive，不在此列，
+          // 其 ::: 手误已由上一步指示行兼容捕获）。
+          const KNOWN_CONTAINERS = new Set([
+            'info', 'success', 'warning', 'error', 'align', 'epigraph'
+          ]);
+          if (!KNOWN_CONTAINERS.has(type)) {
+            out.push(`<p data-src-line="${startLine}" class="luogu-p">${escapeHtml(line)}</p>`);
+            out.push(this.parseBlocks(innerLines, startLine + 1));
+            if (closedLine !== null) {
+              out.push(`<p data-src-line="${startLine + innerLines.length + 1}" class="luogu-p">${escapeHtml(closedLine)}</p>`);
+            }
+            continue;
           }
 
           // `startLine` lets the editor pair a rendered callout with the exact
