@@ -2170,3 +2170,38 @@ code[class*="language-"] {
   margin-left: 6px;
   text-decoration: none;
 }
+
+/* ── Cute Table：三线表（three-line / booktabs 风格）──────────── */
+.luogu-three-table {
+  border: none;
+}
+.luogu-three-table thead tr:first-child th {
+  border: none;
+  border-top: 2px solid #444c56;
+  border-bottom: 1.5px solid #444c56;
+  background: transparent;
+}
+[data-theme="dark"] .luogu-three-table thead tr:first-child th {
+  border-top-color: rgba(255, 255, 255, 0.65);
+  border-bottom-color: rgba(255, 255, 255, 0.65);
+}
+.luogu-three-table td {
+  border: none;
+}
+.luogu-three-table tbody tr:last-child td {
+  border-bottom: 2px solid #444c56;
+}
+[data-theme="dark"] .luogu-three-table tbody tr:last-child td {
+  border-bottom-color: rgba(255, 255, 255, 0.65);
+}
+
+/* ── Cute Table：tuack= 参数指定的加粗竖线列边界 ──────────────── */
+.luogu-tuack-boundary {
+  border-right: 2px solid #3498db !important;
+}
+table:not(.luogu-tuack-table) .luogu-tuack-boundary {
+  border-right: 2px solid #444c56 !important;
+}
+[data-theme="dark"] table:not(.luogu-tuack-table) .luogu-tuack-boundary {
+  border-right-color: rgba(255, 255, 255, 0.65) !important;
+}

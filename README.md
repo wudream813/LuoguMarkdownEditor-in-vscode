@@ -30,7 +30,7 @@
 - 自研渲染器严格对账洛谷现行编辑器（remark/rehype + remark-gfm + remark-math + remark-directive 管线，见[编辑器手册](https://www.luogu.com.cn/article/70w8j2pj)），57 例差分语料 **57/57 一致**
 - KaTeX 公式三级匹配：块级 `$$`、整行 `$$x$$`、段内 `$$x$$`（行内），与洛谷语义一致
 - GFM 全集：脚注 `[^n]`、裸 URL 自动链接（`https://…` / `www.…`）、单/双波浪删除线、任务列表、表格对齐、硬换行
-- 洛谷扩展：`:::info|success|warning|error` 折叠框、`:::align{}`、`:::epigraph[落款]`、`::cute-table{tuack|three}`、Prism 代码高亮（未标注语言默认按 C++）
+- 洛谷扩展：`:::info|success|warning|error` 折叠框、`:::align{}`、`:::epigraph[落款]`、`::cute-table`（默认/三线表 `{three}`/竞赛风格 `{tuack}`/`{tuack=N[,M…]}` 加粗竖线）、Prism 代码高亮（未标注语言默认按 C++）
 - 滚动同步、行号锚点、`data-src-line` 双向定位
 
 ### 排版修复与风格 lint
@@ -61,7 +61,7 @@
 | 代码 | 行内代码、代码块（可选行号、行高亮 `lines=…`） |
 | 公式 | `$x$`、`$$…$$`（块级） |
 | 折叠框 | `:::info[标题]` 等四色 |
-| 表格对齐 | `::cute-table{tuack}`、`:::align{center}` |
+| 表格对齐 | `::cute-table{tuack|three|tuack=N}`、`:::align{center}` |
 | 链接/媒体 | `[text](url)`、`![](bilibili:BV号)`、任务列表 |
 | 工具 | 一键排版修复、备份恢复 |
 

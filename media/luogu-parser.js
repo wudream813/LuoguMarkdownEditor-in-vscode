@@ -430,11 +430,22 @@
           continue;
         }
 
-        // 2. Cute table indicator: ::cute-table or ::cute-table{tuack} or ::cute-table{center}
+        // 2. Cute table indicator: ::cute-table / {three}（三线表）/ {tuack}（竞赛风格）
+        //    / {tuack=N[,M…]}（在第 N/M 列后附加粗竖线，手册 70w8j2pj 表格工具参数）
         const cuteTableMatch = line.trim().match(/^::cute-table(?:\{(.*?)\})?\s*$/i);
         if (cuteTableMatch) {
-          const param = (cuteTableMatch[1] || '').trim().toLowerCase();
-          const isTuack = param === 'tuack' || param === 'trunk';
+          const rawParam = (cuteTableMatch[1] || '').trim().toLowerCase();
+          const param = rawParam.replace(/\s+/g, '');
+          const tuackParamMatch = param.match(/^tuack=([\d,]+)$/);
+          const isThree = param === 'three';
+          const isTuack = param === 'tuack' || param === 'trunk' || !!tuackParamMatch;
+          const tuackCols = [];
+          if (tuackParamMatch) {
+            for (const part of tuackParamMatch[1].split(',')) {
+              const v = parseInt(part, 10);
+              if (v > 0) tuackCols.push(v);
+            }
+          }
           const isCenter = !isTuack; // default without {tuack} represents centered cute-table
 
           // Look ahead to find table
@@ -446,7 +457,9 @@
               tableLines.push(lines[i]);
               i++;
             }
-            out.push(this.renderTable(tableLines, isTuack, isCenter));
+            out.push(this.renderTable(tableLines,
+              isTuack ? 'tuack' : (isThree ? 'three' : (isCenter ? 'cute' : 'default')),
+              tuackCols));
           }
           continue;
         }
@@ -808,7 +821,10 @@
     }
 
     // Render Luogu Tables with ^ (rowspan) and < (colspan) cell merging & cute-table
-    renderTable(tableLines, isCuteTable = false, isCentered = false) {
+    renderTable(tableLines, cuteStyle = 'default', tuackCols = []) {
+      const isCuteTable = cuteStyle === 'tuack';
+      const isCentered = cuteStyle === 'cute';
+      const isThreeLine = cuteStyle === 'three';
       if (tableLines.length < 2) return '';
 
       const parsedRows = [];
@@ -888,17 +904,22 @@
         }
       }
 
-      const centerClass = isCentered ? ' luogu-table-center-wrapper' : '';
-      const tuackClass = isCuteTable ? ' luogu-tuack-table' : (isCentered ? ' luogu-cute-centered-table' : '');
+      const centerClass = (isCentered || isThreeLine) ? ' luogu-table-center-wrapper' : '';
+      const styleClass = isCuteTable ? ' luogu-tuack-table'
+        : isThreeLine ? ' luogu-three-table'
+        : (isCentered ? ' luogu-cute-centered-table' : '');
+      const boundClassFor = (c) =>
+        (tuackCols.length && (c + 1) < numCols && tuackCols.includes(c + 1)) ? ' luogu-tuack-boundary' : '';
       let html = `<div class="luogu-table-wrapper${centerClass}">`;
-      html += `<table class="luogu-table${tuackClass}">`;
+      html += `<table class="luogu-table${styleClass}">`;
 
       // Header
       html += '<thead><tr>';
       for (let c = 0; c < numCols; c++) {
         const hText = headerCells[c] || '';
         const alignStyle = colAligns[c] ? ` style="text-align:${colAligns[c]}"` : '';
-        html += `<th${alignStyle}>${this.renderInline(hText)}</th>`;
+        const hClass = boundClassFor(c);
+        html += `<th${alignStyle}${hClass ? ` class="${hClass.trim()}"` : ''}>${this.renderInline(hText)}</th>`;
       }
       html += '</tr></thead>';
 
@@ -914,6 +935,8 @@
           if (cell.rowspan > 1) attrs += ` rowspan="${cell.rowspan}"`;
           if (cell.colspan > 1) attrs += ` colspan="${cell.colspan}"`;
           if (cell.align) attrs += ` style="text-align:${cell.align}"`;
+          const dClass = boundClassFor(c);
+          if (dClass) attrs += ` class="${dClass.trim()}"`;
 
           html += `<td${attrs}>${this.renderInline(cell.text)}</td>`;
         }
