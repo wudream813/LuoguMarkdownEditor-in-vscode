@@ -650,19 +650,9 @@ async function exportDocument(mode) {
     });
     fs.writeFileSync(target.fsPath, html, 'utf8');
 
-    // katex.min.css 以相对路径引用 fonts/ —— 把字体目录复制到导出目录，
-    // 否则数学公式会退化为默认衬线字体（内容仍可读）。
-    let fontsNote = '';
-    const fontsSrc = path.join(assetsRoot, 'katex', 'fonts');
-    if (fs.existsSync(fontsSrc)) {
-      const fontsDst = path.join(path.dirname(target.fsPath), 'fonts');
-      if (!fs.existsSync(fontsDst)) {
-        fs.cpSync(fontsSrc, fontsDst, { recursive: true });
-        fontsNote = '（已附带 fonts/ 字体目录，移动 HTML 时请一起移动）';
-      } else {
-        fontsNote = '（复用已有 fonts/ 字体目录）';
-      }
-    }
+    // v1.2.15：KaTeX 字体内嵌进 HTML（data URI woff2，约 +400KB），单文件自包含，
+    // 任意移动/发送不需要再保持 fonts/ 目录在你身边。
+    const fontsNote = '（已内嵌 KaTeX 字体，单文件可任意移动）';
 
     if (mode === 'html') {
       const pick = await vscode.window.showInformationMessage(

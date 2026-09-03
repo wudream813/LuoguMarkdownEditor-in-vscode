@@ -1325,11 +1325,21 @@ code[class*="language-"] {
 
 /* KaTeX Formulas */
 .luogu-math-display {
-  margin: 1.2em 0;
+  /* fit-content + margin auto：宽度受公式内容决定、容器作块后双击居中。
+     仅靠 text-align:center 靠不住（多个 katex/预览包层上会左对齐退回） */
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.2em auto;
   overflow-x: auto;
   overflow-y: hidden;
   text-align: center;
   padding: 6px 0;
+}
+
+.luogu-math-block-wrap {
+  display: block;
+  text-align: center;
 }
 
 .luogu-math-inline {

@@ -1,4 +1,16 @@
 # Changelog
+## [1.2.15] - 2026-08-30
+
+### 修复
+
+- **行间公式不居中（预览 + 导出都修）**：`.luogu-math-display` 仅靠 `text-align:center` 不够稳，受 KaTeX 0.18 `width:min-content` 内层与多重包层影响可回退左对齐。改为 `width: fit-content + margin: x auto` 块级居中，预览（`styles.css`）与导出（`EXPORT_CSS` 附加 `!important` 鞘装）两地同时生效。
+- **导出 HTML 自包含**：KaTeX woff2 字体 20 个 face 全部以 `data:` URI 内嵌（约 +400KB），单独发出的 HTML 无需携带 fonts/ 目录。Volderka 版 HTML 的外部 fonts/ 方案弃用。
+- **暗色页上 Ctrl+P 打印为通用亮色**：从 `styles.css :root` 抽出亮色变量集封装为 `@media print { [data-theme="dark"] ... }` 覆盖，即使导出页选择了暗色也能白盒打印（之前会糊黑）。
+
+### 测试
+
+- `test-export.js` +4：data URI 字体 ≥18 face / 打印亮印覆盖 / fit-content 居中鞘装。导出回归 14/14；其余 63 差分 + 49 对抗 + 42+58 回归全绿。
+
 ## [1.2.14] - 2026-08-30
 
 ### 修复
