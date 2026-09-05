@@ -65,11 +65,27 @@ function getTemplate(store, name) {
   return readAll(store)[name] || null;
 }
 
+/**
+ * 直接替换模板正文（v1.2.18：用户要求「支持直接修改用户模板内容」）。
+ * createdAt 保留，updatedAt 刷新。
+ * @returns {Promise<{status:'updated'|'missing'|'invalid', name?:string}>}
+ */
+async function updateTemplate(store, name, newText) {
+  const body = String(newText || '').trim();
+  if (!body) return { status: 'invalid' };
+  const all = readAll(store);
+  if (!all[name]) return { status: 'missing' };
+  all[name] = { ...all[name], text: newText, updatedAt: Date.now() };
+  await store.update(TEMPLATES_KEY, all);
+  return { status: 'updated', name };
+}
+
 module.exports = {
   TEMPLATES_KEY,
   listTemplates,
   saveTemplate,
   deleteTemplate,
   renameTemplate,
+  updateTemplate,
   getTemplate,
 };

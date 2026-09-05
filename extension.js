@@ -76,6 +76,10 @@ class ToolboxProvider {
       new ToolboxItem('H2 标题', 'luogu-editor.insertHeading2', 'symbol-keyword', '## '),
       new ToolboxItem('H3 标题', 'luogu-editor.insertHeading3', 'symbol-keyword', '### '),
       new ToolboxItem('H4 标题', 'luogu-editor.insertHeading4', 'symbol-keyword', '#### '),
+      new ToolboxItem('H5 标题', 'luogu-editor.insertHeading5', 'symbol-keyword', '##### '),
+      new ToolboxItem('H6 标题', 'luogu-editor.insertHeading6', 'symbol-keyword', '###### '),
+      new ToolboxItem('无序列表', 'luogu-editor.insertUList', 'list-unordered', '- item'),
+      new ToolboxItem('有序列表', 'luogu-editor.insertOList', 'list-ordered', '1. item'),
     ];
     if (l === '代码与引用') return [
       new ToolboxItem('行内代码', 'luogu-editor.insertInlineCode', 'symbol-misc', '`code`'),
@@ -134,7 +138,7 @@ class TemplatesProvider {
     if (element.label === '我的模板') {
       const items = [
         new ToolboxItem('保存当前文档为模板', 'luogu-editor.saveAsTemplate', 'save', '把当前 Markdown 存成自建模板'),
-        new ToolboxItem('管理我的模板…', 'luogu-editor.manageUserTemplates', 'gear', '重命名 / 删除'),
+        new ToolboxItem('管理我的模板…', 'luogu-editor.manageUserTemplates', 'gear', '修改内容 / 重命名 / 删除'),
       ];
       const userTemplates = listTemplates(this.context.globalState);
       for (const t of userTemplates) {
@@ -604,6 +608,8 @@ function activate(context) {
   reg('luogu-editor.insertHeading2', () => insertTextAtCursor('\n## 标题\n'));
   reg('luogu-editor.insertHeading3', () => insertTextAtCursor('\n### 标题\n'));
   reg('luogu-editor.insertHeading4', () => insertTextAtCursor('\n#### 标题\n'));
+  reg('luogu-editor.insertHeading5', () => insertTextAtCursor('\n##### 标题\n'));
+  reg('luogu-editor.insertHeading6', () => insertTextAtCursor('\n###### 标题\n'));
   reg('luogu-editor.insertInlineCode', () => wrapSelectionOrInsert('`', '`', 'code'));
   reg('luogu-editor.insertCodeBlock', async () => {
     const lang = await vscode.window.showQuickPick(['cpp','c','python','java','pascal','rust','go','plain'], { placeHolder: '选择语言' });
@@ -711,10 +717,26 @@ function activate(context) {
     );
     if (!pick) return;
     const action = await vscode.window.showQuickPick(
-      [{ label: 'edit', description: '重命名' }, { label: 'trash', description: '删除' }],
+      [
+        { label: 'edit', description: '修改内容' },
+        { label: 'symbol-namespace', description: '重命名' },
+        { label: 'trash', description: '删除' },
+      ],
       { placeHolder: `对「${pick.label}」做什么？` }
     );
     if (!action) return;
+    if (action.label === 'edit') {
+      // 直接修改模板内容：把正文装进临时未保存文档让用户编辑，编辑完成照旧走
+      // 「保存当前文档为模板」同名覆盖——这是多行 Markdown 在 VSCode 里没有原生
+      // 输入控件的最自然形态（v1.2.18 用户要求「支持直接修改用户模板内容」）。
+      const tpl = getTemplate(context.globalState, pick.label);
+      if (!tpl) { vscode.window.showErrorMessage('模板不存在'); return; }
+      const doc = await vscode.workspace.openTextDocument({ content: tpl.text, language: 'markdown' });
+      await vscode.window.showTextDocument(doc, { preview: false });
+      vscode.window.showInformationMessage(
+        `正在编辑模板「${pick.label}」的内容——改完后：工具箱 →「保存当前文档为模板」，同名选择覆盖即可`);
+      return;
+    }
     if (action.label === 'trash') {
       const ok = await vscode.window.showWarningMessage(`删除模板「${pick.label}」？删除不可撤销`, '删除', '取消');
       if (ok !== '删除') return;

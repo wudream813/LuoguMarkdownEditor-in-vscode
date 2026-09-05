@@ -173,6 +173,9 @@
       this.options = Object.assign({
         katex: typeof katex !== 'undefined' ? katex : null,
         prism: typeof Prism !== 'undefined' ? Prism : null,
+        // VSCode 预览里 Bilibili facade 附「缺少音频解码」提示；导出 HTML 在真实
+        // 浏览器中可正常发声，提示会误导——导出侧传 false 去掉（v1.2.18）。
+        decodeHint: true,
         enableInteractiveTasks: true,
         headingPrefix: 'heading-',
         enableLineNumbers: true
@@ -246,9 +249,9 @@
       // 此前单条 /\$\$([\s\S]*?)\$\$/ 会把「文字 $$ s\n\n$$」错配为跨空行公式——
       // 而洛谷的块/行内规则分别将其呈现为字面文本「文字 $$ s」。
       let mathIdx = 0;
-      const stashDisplay = (spanText, formula, prefix) => {
-        const id = `LUOGUMATHBLOCK${mathIdx++}END`;
-        store.push({ id, type: 'display', formula: formula.trim() });
+      const stashDisplay = (spanText, formula, prefix, para) => {
+        const id = para ? `LUOGUMATHPARA${mathIdx++}END` : `LUOGUMATHBLOCK${mathIdx++}END`;
+        store.push({ id, type: 'display', formula: formula.trim(), para: !!para });
         // Same reasoning as fenced code: remember the real span so line numbers stay
         // faithful even though the placeholder collapses to one line.
         this._tokenLines.set(id, spanText.split('\n').length);
@@ -275,8 +278,10 @@
       // 3) 段内 $$（不跨空行）—— v1.2.17 起统一按「行间公式」渲染：双美元号在洛谷
       // 实际渲染（KaTeX auto-render 语义，$$ 出现在任何位置都占独立居中行）与用户
       // 预期一致；此前按 remark-math 语义判行内导致用户连续报「行间公式不居中」。
+      // 用 LUOGUMATHPARA 前缀区别于独占行 token（后者由 renderParagraph 包外层滚动
+      // 容器），此处 token 埋在段落行内，恢复时需自带外层包裹。
       text = text.replace(/\$\$((?:(?!\n[ \t]*\n)[\s\S])+?)\$\$/g,
-        (match, formula) => stashDisplay(match, formula));
+        (match, formula) => stashDisplay(match, formula, undefined, true));
 
       // Inline math: $ ... $
       // Must not match \$ (escaped) or empty $$, and should not span across empty lines.
@@ -355,6 +360,12 @@
 
         if (item.type === 'display') {
           rendered = `<div class="luogu-math-display">${rendered}</div>`;
+          // Mid-paragraph tokens (LUOGUMATHPARA) never pass renderParagraph's
+          // whole-line wrapper, so they must carry the 100%-width scroll
+          // container themselves — overflowing math must scroll the WRAPPER,
+          // never a fit-content block (which painted spurious scrollbars even
+          // on narrow formulas: "很窄的行间公式也会有滚动条").
+          if (item.para) rendered = `<div class="luogu-math-block-wrap">${rendered}</div>`;
         } else {
           rendered = `<span class="luogu-math-inline">${rendered}</span>`;
         }
@@ -363,7 +374,7 @@
       }
 
       if (replacements.size > 0) {
-        html = html.replace(/LUOGUMATH(?:BLOCK|INLINE)\d+END/g, (m) =>
+        html = html.replace(/LUOGUMATH(?:BLOCK|INLINE|PARA)\d+END/g, (m) =>
           replacements.has(m) ? replacements.get(m) : m
         );
       }
@@ -404,7 +415,7 @@
       const srcLineOf = new Array(n);
       {
         let src = baseLine;
-        const re = /LUOGU(?:CODEBLOCK|MATHBLOCK)\d+END/g;
+        const re = /LUOGU(?:CODEBLOCK|MATH(?:BLOCK|PARA))\d+END/g;
         for (let k = 0; k < n; k++) {
           srcLineOf[k] = src;
           let span = 1;
@@ -1191,7 +1202,7 @@
                     <span class="luogu-bilibili-play-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                     </span>
-                    <span class="luogu-bilibili-facade-text">点击加载视频（VSCode 缺少音频解码，将无声播放）</span>
+                    <span class="luogu-bilibili-facade-text">点击加载视频${this.options.decodeHint ? '（VSCode 缺少音频解码，将无声播放）' : ''}</span>
                   </button>
                 </div>
               </div>

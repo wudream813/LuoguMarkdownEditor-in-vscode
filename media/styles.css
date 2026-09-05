@@ -1331,8 +1331,12 @@ code[class*="language-"] {
   width: fit-content;
   max-width: 100%;
   margin: 1.2em auto;
-  overflow-x: auto;
-  overflow-y: hidden;
+  /* 自身不做滚动容器：fit-content 宽度由内容决定，少数环境（分数像素、WebView
+     滚动条策略）会给极窄公式画出空滚动条——「很窄的行间公式也有滚动条」。
+     真正的横向溢出交给 100% 宽的外层 .luogu-math-block-wrap 滚动（内容比窗体
+     窄时结构性不可能滚动；比窗体宽时才滚）。 */
+  overflow-x: visible;
+  overflow-y: visible;
   text-align: center;
   padding: 6px 0;
 }
@@ -1340,6 +1344,8 @@ code[class*="language-"] {
 .luogu-math-block-wrap {
   display: block;
   text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .luogu-math-inline {

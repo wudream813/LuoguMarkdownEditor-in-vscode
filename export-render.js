@@ -23,7 +23,9 @@ function getParser(assetsRoot) {
     try { require(path.join(assetsRoot, 'prism', `prism-${lang}.min.js`)); } catch (e) { /* 缺语言包就跳过 */ }
   }
   const { LuoguParser } = require(path.join(assetsRoot, 'luogu-parser.js'));
-  _parser = new LuoguParser({ katex, prism: Prism });
+  // decodeHint:false —— 导出的 HTML 跑在真实浏览器里，B 站播放器可正常发声，
+  // 「VSCode 缺少音频解码」提示在导出页只会误导（v1.2.18 用户反馈）。
+  _parser = new LuoguParser({ katex, prism: Prism, decodeHint: false });
   return _parser;
 }
 
@@ -110,15 +112,21 @@ body {
   background: var(--bg-primary, #ffffff);
   color: var(--text-primary, #2c3e50);
 }
-/* 行间公式居中：fit-content + margin auto，任何包层/浏览器默认渲染下都居中 */
-.luogu-math-block-wrap { display: block !important; text-align: center !important; }
+/* 行间公式居中：fit-content + margin auto，任何包层/浏览器默认渲染下都居中；
+   滚动容器放在 100% 宽的外层（窄公式结构性不可能出滚动条，宽公式照常可滚） */
+.luogu-math-block-wrap {
+  display: block !important;
+  text-align: center !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
 .luogu-math-display {
   display: block !important;
   width: fit-content !important;
   max-width: 100% !important;
   margin: 1.2em auto !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
   text-align: center !important;
 }
 `;
