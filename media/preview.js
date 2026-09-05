@@ -403,6 +403,14 @@
       case 'scroll-sync-enabled':
         scrollSyncEnabled = !!msg.enabled;
         break;
+      case 'task-toggle-failed': {
+        // Extension refused the write (stale preview / bound editor gone). The
+        // checkbox already flipped optimistically on click — revert it so the
+        // preview never claims a state the source doesn't have.
+        var failed = previewEl.querySelector('[data-task-line="' + msg.taskLine + '"]');
+        if (failed) failed.checked = !msg.checked;
+        break;
+      }
     }
   });
 

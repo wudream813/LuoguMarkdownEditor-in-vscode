@@ -195,7 +195,7 @@ class PreviewPanel {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
     // Handle messages from webview
-    this.panel.webview.onDidReceiveMessage((msg) => {
+    this.panel.webview.onDidReceiveMessage(async (msg) => {
       if (msg.type === 'ready') {
         // Webview finished loading. Apply the pending theme FIRST (this is the
         // only reliable point — earlier posts are dropped), then content+scroll.
@@ -216,8 +216,14 @@ class PreviewPanel {
         // Toggle task checkbox in the document the preview is BOUND to — not the
         // active editor, which may have moved to a different (e.g. non-markdown) file.
         const editor = this._findBoundEditor();
-        if (editor) {
-          toggleTaskInEditor(editor, msg.taskLine, msg.checked);
+        const ok = editor ? await toggleTaskInEditor(editor, msg.taskLine, msg.checked) : false;
+        if (!ok && this.panel) {
+          // 回写失败时预览里的复选框已先行翻转——通知 webview 回滚，避免「源码没变但是
+          // 预览看着勾上了」的错觉；同时给用户一个可见原因（此前整条链静默丢弃）。
+          this.panel.webview.postMessage({ type: 'task-toggle-failed', taskLine: msg.taskLine, checked: msg.checked });
+          vscode.window.showInformationMessage(
+            editor ? '任务勾选同步失败：预览对应的源码行已不是任务项，请刷新预览后重试'
+                   : '任务勾选同步失败：未找到预览绑定的 Markdown 编辑器');
         }
       } else if (msg.type === 'preview-scrolled') {
         // Reverse scroll sync: user scrolled the PREVIEW pane → follow in editor.
@@ -644,13 +650,22 @@ function activate(context) {
   // 滚动同步开关：一键切换（写 Global 配置，webview 与主侧同步更新）
   reg('luogu-editor.toggleScrollSync', async () => {
     const next = !scrollSyncEnabled;
-    await vscode.workspace.getConfiguration().update('luogu-editor.scrollSync', next,
-      vscode.ConfigurationTarget.Global);
+    // 设置写入在某些环境会被拒（远程受限工作区、扩展宿主残留的未刷新配置注册缓存
+    // 抛 "没有注册配置"），绝不能让开关因此整个失败——内存态先行，广播立刻生效。
+    let persisted = true;
+    try {
+      await vscode.workspace.getConfiguration().update('luogu-editor.scrollSync', next,
+        vscode.ConfigurationTarget.Global);
+    } catch (e) {
+      persisted = false;
+    }
     // onDidChangeConfiguration 也会触发一次，这里显式广播保证新值（而非等事件回再发旧值）
     scrollSyncEnabled = next;
     broadcastScrollSync();
     refreshTemplates();
-    vscode.window.showInformationMessage(`滚动同步已${next ? '开启' : '关闭'}`);
+    vscode.window.showInformationMessage(
+      persisted ? `滚动同步已${next ? '开启' : '关闭'}`
+                : `滚动同步已${next ? '开启' : '关闭'}（无法写入用户设置，本次会话内生效）`);
   });
 
   // ── 用户自建模板（v1.2.15：globalState 本机存储）──
@@ -838,21 +853,28 @@ function deactivate() {}
  *  - the line must still look like a task item, otherwise the edit is dropped;
  *  - if the checkbox already has the requested state, no edit is made at all.
  */
+/**
+ * Toggle a task checkbox in the markdown source.
+ * @returns {Promise<boolean>} true when the edit landed (or was already in the
+ *          desired state); false when the write was refused because the preview
+ *          was stale — callers surface this instead of letting the webview's
+ *          once-flipped checkbox lie about the source.
+ */
 async function toggleTaskInEditor(editor, taskLine, checked) {
-  if (taskLine === null || taskLine === undefined || Number.isNaN(taskLine)) return;
+  if (taskLine === null || taskLine === undefined || Number.isNaN(taskLine)) return false;
   const doc = editor.document;
-  if (taskLine < 0 || taskLine >= doc.lineCount) return;
+  if (taskLine < 0 || taskLine >= doc.lineCount) return false;
 
   const line = doc.lineAt(taskLine).text;
   // Bullet or ordered marker, any depth of blockquote prefix ('> ').
   const match = line.match(/^((?:\s*>\s?)*)(\s*(?:[-*+]|\d+\.)\s+)\[([ xX])\](.*)$/);
-  if (!match) return; // preview was stale; the line is no longer a task
+  if (!match) return false; // preview was stale; the line is no longer a task
 
   const isCurrentlyChecked = match[3].toLowerCase() === 'x';
-  if (isCurrentlyChecked === Boolean(checked)) return; // already in the requested state
+  if (isCurrentlyChecked === Boolean(checked)) return true; // no edit needed
 
   const newLine = `${match[1]}${match[2]}[${checked ? 'x' : ' '}]${match[4]}`;
-  await editor.edit(editBuilder => {
+  return editor.edit(editBuilder => {
     editBuilder.replace(doc.lineAt(taskLine).range, newLine);
   });
 }

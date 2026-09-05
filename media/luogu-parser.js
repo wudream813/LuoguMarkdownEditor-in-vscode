@@ -272,13 +272,11 @@
       // 2) $$x$$ 独占单行
       text = text.replace(/(^|\n)[ \t]*\$\$([^\n]*?\S)\$\$[ \t]*(?=\n|$)/g,
         (match, prefix, formula) => stashDisplay(match.slice(prefix.length), formula, prefix));
-      // 3) 段内 $$（不跨空行）——洛谷 remark-math 将段内 $$ 视为行内公式
+      // 3) 段内 $$（不跨空行）—— v1.2.17 起统一按「行间公式」渲染：双美元号在洛谷
+      // 实际渲染（KaTeX auto-render 语义，$$ 出现在任何位置都占独立居中行）与用户
+      // 预期一致；此前按 remark-math 语义判行内导致用户连续报「行间公式不居中」。
       text = text.replace(/\$\$((?:(?!\n[ \t]*\n)[\s\S])+?)\$\$/g,
-        (match, formula) => {
-          const id = `LUOGUMATHINLINE${mathIdx++}END`;
-          store.push({ id, type: 'inline', formula: formula.trim() });
-          return id;
-        });
+        (match, formula) => stashDisplay(match, formula));
 
       // Inline math: $ ... $
       // Must not match \$ (escaped) or empty $$, and should not span across empty lines.
