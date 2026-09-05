@@ -16,6 +16,9 @@
   var previewEl = document.getElementById('previewContent');
   var vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
   var scrollSyncLock = false;
+  // 滚动同步总开关（扩展侧 postMessage 下发）；关闭时：不回传 preview-scrolled、
+  // 忽略从编辑器过来的 scroll-sync（与主侧的双向门禁形面子物理一致）
+  var scrollSyncEnabled = true;
 
   // Loaded Bilibili videos are kept as LIVE <iframe> elements keyed by src URL.
   // Every edit triggers a full innerHTML re-render, which used to DESTROY any
@@ -322,6 +325,7 @@
 
   function relayPreviewScroll() {
     if (!vscodeApi) return;
+    if (!scrollSyncEnabled) return;
     var line = lineForScrollTop();
     if (line === null) return;
     vscodeApi.postMessage({ type: 'preview-scrolled', topLine: line });
@@ -381,6 +385,7 @@
         render(msg.content);
         break;
       case 'scroll-sync': {
+        if (!scrollSyncEnabled) break; // 用户关闭同步，编辑器侧发来的同步不动
         // Rapid-fire syncs mean the user is WHEEL-FLINGING the editor. Chaining
         // smooth animations then accumulates inertia that outlives the user's
         // last input — and (pre-watchdog) leaked back as relays that dragged the
@@ -394,6 +399,9 @@
       }
       case 'set-theme':
         setTheme(msg.theme);
+        break;
+      case 'scroll-sync-enabled':
+        scrollSyncEnabled = !!msg.enabled;
         break;
     }
   });

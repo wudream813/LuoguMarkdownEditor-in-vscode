@@ -8,6 +8,7 @@ const fs = require('fs');
 const { buildStandaloneHtml } = require('./export-render');
 const { lintLuoguMarkdown } = require('./lint');
 const { lintLuoguStyle, autoFixLuoguStyle } = require('./style-lint');
+const { listTemplates, saveTemplate, deleteTemplate, renameTemplate, getTemplate } = require('./user-templates');
 
 // Full preset template library (exported for both web and Node — shared file).
 // Previously dead code: the sidebar inserted the tiny hard-coded fallbacks below
@@ -19,6 +20,9 @@ try {
   // File missing/corrupt — fall through to the built-in minimal fallbacks.
 }
 
+// 滚动同步全局开关（模块作用域：PreviewPanel 类体与 activate 内联监听共享读取）
+let scrollSyncEnabled = true;
+
 // ────────────────────────────────────────────────────────────────
 // Sidebar
 // ────────────────────────────────────────────────────────────────
@@ -26,7 +30,12 @@ try {
 class ToolboxItem extends vscode.TreeItem {
   constructor(label, command, icon, description) {
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.command = command ? { command, title: label } : undefined;
+    // command 支持两种形式：字符串（无参）或 { command, arguments }（带参）
+    if (command && typeof command === 'object') {
+      this.command = { title: label, ...command };
+    } else {
+      this.command = command ? { command, title: label } : undefined;
+    }
     this.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
     this.description = description || '';
     this.tooltip = description ? `${label} -> ${description}` : label;
@@ -101,15 +110,18 @@ class ToolboxProvider {
 }
 
 class TemplatesProvider {
-  constructor() {
+  constructor(context) {
+    this.context = context;
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
   }
+  refresh() { this._onDidChangeTreeData.fire(); }
   getTreeItem(el) { return el; }
   getChildren(element) {
     if (!element) {
       return [
         new ToolboxSection('洛谷模板', 'file-text'),
+        new ToolboxSection('我的模板', 'account'),
         new ToolboxSection('工具', 'tools'),
       ];
     }
@@ -119,8 +131,22 @@ class TemplatesProvider {
       new ToolboxItem('题目题面模板', 'luogu-editor.insertTemplateProblem', 'edit'),
       new ToolboxItem('学术/文章专栏', 'luogu-editor.insertTemplateArticle', 'library'),
     ];
+    if (element.label === '我的模板') {
+      const items = [
+        new ToolboxItem('保存当前文档为模板', 'luogu-editor.saveAsTemplate', 'save', '把当前 Markdown 存成自建模板'),
+        new ToolboxItem('管理我的模板…', 'luogu-editor.manageUserTemplates', 'gear', '重命名 / 删除'),
+      ];
+      const userTemplates = listTemplates(this.context.globalState);
+      for (const t of userTemplates) {
+        items.push(new ToolboxItem(t.name, { command: 'luogu-editor.insertUserTemplate', arguments: [t.name] }, 'file-text',
+          `自建模板 · ${Math.min(t.text.length, 50)}字符…`));
+      }
+      return items;
+    }
     if (element.label === '工具') return [
       new ToolboxItem('一键排版修复', 'luogu-editor.autoFixSpacing', 'zap'),
+      new ToolboxItem('切换滚动同步', 'luogu-editor.toggleScrollSync', 'sync',
+        scrollSyncEnabled ? '已开启（点击关闭）' : '已关闭（点击开启）'),
       new ToolboxItem('复制 Markdown 源码', 'luogu-editor.copyMarkdown', 'copy'),
       new ToolboxItem('导出 HTML', 'luogu-editor.exportHtml', 'export'),
       new ToolboxItem('导出 PDF', 'luogu-editor.exportPdf', 'file-pdf'),
@@ -179,6 +205,7 @@ class PreviewPanel {
           this.boundUri = editor.document.uri.toString();
           this.update(editor.document.getText());
           setTimeout(() => {
+            this.panel.webview.postMessage({ type: 'scroll-sync-enabled', enabled: scrollSyncEnabled });
             const topRange = editor.visibleRanges[0];
             // instant: the very first positioning must JUMP, not smooth-scroll —
             // a smooth animation on open looks like the preview drifting by itself.
@@ -194,6 +221,7 @@ class PreviewPanel {
         }
       } else if (msg.type === 'preview-scrolled') {
         // Reverse scroll sync: user scrolled the PREVIEW pane → follow in editor.
+        if (!scrollSyncEnabled) return; // 双向门禁：即便 webview 误判也再拦一次
         this._scrollEditorToLine(msg.topLine);
       }
     }, null, this.disposables);
@@ -372,7 +400,9 @@ async function replaceAllContent(text) {
 function activate(context) {
   // Sidebar
   vscode.window.registerTreeDataProvider('luogu-editor.toolbox', new ToolboxProvider());
-  vscode.window.registerTreeDataProvider('luogu-editor.templates', new TemplatesProvider());
+  const templatesProvider = new TemplatesProvider(context);
+  vscode.window.registerTreeDataProvider('luogu-editor.templates', templatesProvider);
+  const refreshTemplates = () => templatesProvider.refresh();
 
   // ── 语法检查 → VSCode 问题面板（v1.1.1）──
   // luogu-parser 本身永不报错（宽容渲染），结构性错误只能由独立的 lint 层提示。
@@ -492,6 +522,28 @@ function activate(context) {
     })
   );
 
+  // ── 滚动同步开关（v1.2.15：luogu-editor.scrollSync 配置 + 工具箱一键切换）──
+  // 两个方向各自设卡：编辑→预览（visibleRanges 监听处）、预览→编辑（消息处理处）。
+  // webview 侧也停发 'preview-scrolled'（减少噪声），并以同 flag 忽略收到的 scroll-sync。
+  scrollSyncEnabled = vscode.workspace.getConfiguration()
+    .get('luogu-editor.scrollSync', true);
+  const broadcastScrollSync = () => {
+    if (PreviewPanel.instance) {
+      PreviewPanel.instance.panel.webview.postMessage({
+        type: 'scroll-sync-enabled', enabled: scrollSyncEnabled,
+      });
+    }
+  };
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('luogu-editor.scrollSync')) return;
+      scrollSyncEnabled = vscode.workspace.getConfiguration()
+        .get('luogu-editor.scrollSync', true);
+      broadcastScrollSync();
+      if (typeof refreshTemplates === 'function') refreshTemplates();
+    })
+  );
+
   // Editor scroll -> preview scroll.
   // NOTE: the selection-change listener that used to live here was removed —
   // merely moving the cursor re-scrolled the preview even though the visible
@@ -500,6 +552,7 @@ function activate(context) {
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       const preview = PreviewPanel.instance;
       if (!preview || e.textEditor.document.languageId !== 'markdown') return;
+      if (!scrollSyncEnabled) return;
       // Echo guard: a visibleRanges change WE caused by following a preview
       // scroll must not be synced BACK into the preview — that bounce is the
       // rubber-banding this guard exists to prevent. Pure time window (see the
@@ -587,6 +640,80 @@ function activate(context) {
   reg('luogu-editor.insertTemplateSolution', () => insertTemplateFromFile('solution'));
   reg('luogu-editor.insertTemplateProblem', () => insertTemplateFromFile('problem'));
   reg('luogu-editor.insertTemplateArticle', () => insertTemplateFromFile('article'));
+
+  // 滚动同步开关：一键切换（写 Global 配置，webview 与主侧同步更新）
+  reg('luogu-editor.toggleScrollSync', async () => {
+    const next = !scrollSyncEnabled;
+    await vscode.workspace.getConfiguration().update('luogu-editor.scrollSync', next,
+      vscode.ConfigurationTarget.Global);
+    // onDidChangeConfiguration 也会触发一次，这里显式广播保证新值（而非等事件回再发旧值）
+    scrollSyncEnabled = next;
+    broadcastScrollSync();
+    refreshTemplates();
+    vscode.window.showInformationMessage(`滚动同步已${next ? '开启' : '关闭'}`);
+  });
+
+  // ── 用户自建模板（v1.2.15：globalState 本机存储）──
+  reg('luogu-editor.saveAsTemplate', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'markdown') {
+      vscode.window.showWarningMessage('请先打开一个 Markdown 文件'); return;
+    }
+    const fullText = editor.document.getText();
+    if (!fullText.trim()) { vscode.window.showWarningMessage('当前文档为空'); return; }
+    const firstH1 = fullText.match(/^#\s+(.+)$/m);
+    const fileBase = editor.document.fileName.split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
+    const name = await vscode.window.showInputBox({
+      prompt: '模板名称（将出现在「我的模板」列表里）',
+      value: (firstH1 && firstH1[1].trim()) || fileBase || '我的模板',
+    });
+    if (name === undefined) return;
+    const r = await saveTemplate(context.globalState, name, fullText);
+    if (r.status === 'exists') {
+      const pick = await vscode.window.showWarningMessage(
+        `模板「${r.name}」已存在`, '覆盖', '换个名字'
+      );
+      if (pick === '覆盖') {
+        await saveTemplate(context.globalState, r.name, fullText, { overwrite: true });
+      } else { return; }
+    } else if (r.status !== 'created' && r.status !== 'overwritten') {
+      vscode.window.showErrorMessage('模板名不能用 / \\ 或超过 60 字符'); return;
+    }
+    refreshTemplates();
+    vscode.window.showInformationMessage(`已保存模板「${name.trim()}」`);
+  });
+  reg('luogu-editor.insertUserTemplate', (name) => {
+    const t = getTemplate(context.globalState, name);
+    if (!t) { vscode.window.showErrorMessage(`模板「${name}」不存在`); return; }
+    insertTextAtCursor(t.text);
+  });
+  reg('luogu-editor.manageUserTemplates', async () => {
+    const list = listTemplates(context.globalState);
+    if (list.length === 0) { vscode.window.showInformationMessage('还没有自建模板，先点「保存当前文档为模板」创建一个'); return; }
+    const pick = await vscode.window.showQuickPick(
+      list.map((t) => ({ label: t.name, description: `${t.text.length} 字符` })),
+      { placeHolder: '选择一个模板进行管理' }
+    );
+    if (!pick) return;
+    const action = await vscode.window.showQuickPick(
+      [{ label: 'edit', description: '重命名' }, { label: 'trash', description: '删除' }],
+      { placeHolder: `对「${pick.label}」做什么？` }
+    );
+    if (!action) return;
+    if (action.label === 'trash') {
+      const ok = await vscode.window.showWarningMessage(`删除模板「${pick.label}」？删除不可撤销`, '删除', '取消');
+      if (ok !== '删除') return;
+      await deleteTemplate(context.globalState, pick.label);
+      refreshTemplates();
+      vscode.window.showInformationMessage(`已删除模板「${pick.label}」`);
+    } else {
+      const newName = await vscode.window.showInputBox({ prompt: '新名称', value: pick.label });
+      if (newName === undefined) return;
+      const r = await renameTemplate(context.globalState, pick.label, newName);
+      if (r.status === 'renamed') { refreshTemplates(); vscode.window.showInformationMessage(`已重命名为「${r.name}」`); }
+      else { vscode.window.showErrorMessage(r.status === 'exists' ? '该名字已被占用' : '名字不合法（长度≤60，不能含 / \\）'); }
+    }
+  });
   reg('luogu-editor.copyMarkdown', () => {
     const editor = vscode.window.activeTextEditor;
     if (editor && editor.document.languageId === 'markdown') {

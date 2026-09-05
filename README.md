@@ -31,7 +31,7 @@
 - KaTeX 公式三级匹配：块级 `$$`、整行 `$$x$$`、段内 `$$x$$`（行内），与洛谷语义一致
 - GFM 全集：脚注 `[^n]`、裸 URL 自动链接（`https://…` / `www.…`）、单/双波浪删除线、任务列表、表格对齐、硬换行
 - 洛谷扩展：`:::info|success|warning|error` 折叠框、`:::align{}`、`:::epigraph[落款]`、`::cute-table`（默认/三线表 `{three}`/竞赛风格 `{tuack}`/`{tuack=N[,M…]}` 加粗竖线）、Prism 代码高亮（未标注语言默认按 C++）
-- 滚动同步、行号锚点、`data-src-line` 双向定位
+- 滚动同步（可切换）、行号锚点、`data-src-line` 双向定位
 
 ### 排版修复与风格 lint
 
@@ -41,7 +41,7 @@
 
 ### 编辑器端
 
-- 侧边栏工具箱：插入洛谷语法、模板与片段
+- 侧边栏工具箱：插入洛谷语法、模板与片段；支持自建模板库（本机存储，可保存/插入/重命名/删除）
 - 编辑区与预览区滚动同步（watchdog 防抖，用户滚动不被打断）
 - 主题自适应（亮色/暗色）
 
@@ -50,6 +50,12 @@
 1. VSCode 扩展面板搜 `洛谷` 或 `wudream.luogu-markdown-editor`
 2. 命令行：`code --install-extension wudream.luogu-markdown-editor`
 3. 手动：[GitHub Releases](https://github.com/wudream813/LuoguMarkdownEditor-in-vscode/releases/latest) 下载 `.vsix` → `Extensions: Install from VSIX...`
+
+## 侧边栏工具箱
+
+**我的模板**：左侧边栏「模板」区新增「保存当前文档为模板」，把任意 Markdown 文档存成本机（`globalState`）的自建模板，点之即插；支持重命名/删除。
+
+**滚动同步**：预览区与编辑区双向同步默认开启，可在「工具」里一键关闭（也会写配置 `luogu-editor.scrollSync`）。
 
 ## 侧边栏工具箱
 

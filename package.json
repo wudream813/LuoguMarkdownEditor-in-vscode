@@ -2,7 +2,7 @@
   "name": "luogu-markdown-editor",
   "displayName": "Luogu Markdown Editor",
   "description": "洛谷 Markdown & KaTeX 实时预览编辑器 - VSCode 扩展版。左侧编辑，右侧预览，侧边栏工具箱。",
-  "version": "1.2.15",
+  "version": "1.2.16",
   "publisher": "wudream",
   "engines": {
     "vscode": "^1.75.0"
@@ -216,6 +216,22 @@
       {
         "command": "luogu-editor.headingDemote",
         "title": "Luogu Markdown: 降低标题等级"
+      },
+      {
+        "command": "luogu-editor.toggleScrollSync",
+        "title": "Luogu Markdown: 切换滚动同步"
+      },
+      {
+        "command": "luogu-editor.saveAsTemplate",
+        "title": "Luogu Markdown: 保存当前文档为模板"
+      },
+      {
+        "command": "luogu-editor.insertUserTemplate",
+        "title": "Luogu Markdown: 插入我的模板"
+      },
+      {
+        "command": "luogu-editor.manageUserTemplates",
+        "title": "Luogu Markdown: 管理我的模板"
       }
     ],
     "menus": {
@@ -251,6 +267,11 @@
           "type": "boolean",
           "default": true,
           "description": "编辑时自动同步预览"
+        },
+        "luogu-editor.scrollSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用编辑器与预览的双向滚动同步（可用「工具 / 切换滚动同步」一键切换）"
         }
       }
     },
