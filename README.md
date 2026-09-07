@@ -142,4 +142,4 @@ Issue / PR 欢迎。提交前请跑 `test-harness/` 全部测试；渲染层 PR 
 
 ## 许可证
 
-MIT © 2026 wudream
+MIT © 2026 wudream813
