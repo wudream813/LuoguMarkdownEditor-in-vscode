@@ -749,6 +749,13 @@ html, body {
   box-shadow: var(--shadow-sm);
 }
 
+/* 全局兜底：原生 HTML <img>、SVG、高 DPI 截图等绕过 .luogu-img 类路径的图片，
+   同样不得冲出内容列（v1.2.19 用户反馈导出 html 高像素图片越界）。 */
+.preview-content img {
+  max-width: 100%;
+  height: auto;
+}
+
 .luogu-img-error {
   border: 1px dashed var(--luogu-red);
   padding: 10px;

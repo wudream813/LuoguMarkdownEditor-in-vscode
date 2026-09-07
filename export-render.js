@@ -112,6 +112,9 @@ body {
   background: var(--bg-primary, #ffffff);
   color: var(--text-primary, #2c3e50);
 }
+/* 图片全局兜底：原生 HTML <img>、SVG 与极高 DPI 截图均不得冲出内容列
+   （.luogu-img 类已有同规则，这里兜住绕过了类路径的图片，v1.2.19 用户反馈） */
+.luogu-preview-root img { max-width: 100%; height: auto; }
 /* 行间公式居中：fit-content + margin auto，任何包层/浏览器默认渲染下都居中；
    滚动容器放在 100% 宽的外层（窄公式结构性不可能出滚动条，宽公式照常可滚） */
 .luogu-math-block-wrap {
@@ -161,10 +164,107 @@ const TOOLBAR_CSS = `
 const PRINT_CSS = `
 @media print {
   .luogu-code-copy-btn, .luogu-code-copy-button, .luogu-bilibili-facade-hint,
-  .luogu-export-toolbar { display: none !important; }
+  .luogu-export-toolbar, .luogu-toc { display: none !important; }
   body { background: #fff !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+`;
+
+// ── 目录（TOC）：洛谷文章页同款右侧导航（v1.2.19 用户要求：文章太长定位不到重点）──
+// 数据来源：渲染产物里带 id 的标准 luogu 标题（heading-<slug>），按层缩进；
+// 两项以下不生成（短文档强求目录是噪音）。宽屏贴右栏、窄屏退化为顶置面板、打印隐藏。
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildTocHtml(bodyHtml, docTitle) {
+  const items = [];
+  const re = /<h([1-6])\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/g;
+  let m;
+  while ((m = re.exec(bodyHtml)) !== null) {
+    const text = m[3].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    if (text) items.push({ level: Number(m[1]), id: m[2], text });
+  }
+  if (items.length < 2) return '';
+  const links = items.map((it) =>
+    `    <a class="luogu-toc-item luogu-toc-l${it.level}" href="#${escapeAttr(it.id)}">${escapeAttr(it.text)}</a>`);
+  return `<nav class="luogu-toc" id="luogu-toc" aria-label="目录">
+  <div class="luogu-toc-head">目录</div>
+  <a class="luogu-toc-item luogu-toc-top" href="#previewContent">${escapeAttr(docTitle || '文档开头')}</a>
+${links.join('\n')}
+</nav>`;
+}
+
+const TOC_CSS = `
+.luogu-toc {
+  /* 正文 860px 居中 → 右栏贴着正文右侧放；max() 保证窄 margin 不贴边 */
+  position: fixed;
+  top: 72px;
+  right: max(16px, calc(50vw - 430px - 242px));
+  width: 208px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-color, #e5e7eb);
+  font-size: 13px;
+  line-height: 1.5;
+  z-index: 900;
+}
+.luogu-toc-head { font-weight: 600; margin-bottom: 6px; color: var(--text-primary, #2c3e50); }
+.luogu-toc-item {
+  display: block;
+  padding: 2px 0 2px 6px;
+  margin-left: -6px;
+  color: var(--text-secondary, #6b7280);
+  text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-left: 2px solid transparent;
+}
+.luogu-toc-item:hover { color: var(--luogu-blue, #0e90d2); }
+.luogu-toc-top, .luogu-toc-l1 { font-weight: 600; color: var(--text-primary, #2c3e50); }
+.luogu-toc-l2 { padding-left: 6px; }
+.luogu-toc-l3 { padding-left: 18px; }
+.luogu-toc-l4, .luogu-toc-l5, .luogu-toc-l6 { padding-left: 30px; }
+.luogu-toc-item.active {
+  color: var(--luogu-blue, #0e90d2);
+  border-left-color: var(--luogu-blue, #0e90d2);
+  background: var(--luogu-blue-light, #e8f4fa);
+}
+/* 窄屏（含手机）：退化为内容上方的静态面板 */
+@media (max-width: 1200px) {
+  .luogu-toc {
+    position: static; width: auto; max-height: 40vh;
+    margin: 8px 0 20px; padding: 12px 16px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-left-width: 2px; border-radius: 8px;
+  }
+}
+@media print { .luogu-toc { display: none !important; } }
+`;
+
+// 滚动高亮：最后一个越过视口上方 96px 的标题视为「当前节」。纯监听，与内容零耦合。
+const TOC_SCRIPT = `
+(function () {
+  var toc = document.getElementById('luogu-toc');
+  if (!toc) return;
+  var links = Array.prototype.slice.call(
+    toc.querySelectorAll('a.luogu-toc-item[href^="#heading-"]'));
+  var targets = links.map(function (a) {
+    return document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+  });
+  function onScroll() {
+    var idx = 0;
+    var y = window.scrollY + 96;
+    for (var i = 0; i < targets.length; i++) {
+      var t = targets[i];
+      if (t && t.getBoundingClientRect().top + window.scrollY <= y) idx = i;
+    }
+    links.forEach(function (a, i) { a.classList.toggle('active', i === idx); });
+  }
+  document.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
 `;
 
 const PRINT_SCRIPT = `
@@ -187,6 +287,8 @@ function buildStandaloneHtml(markdown, opts) {
   try { genVersion = require(path.join(__dirname, 'package.json')).version; } catch (e) {}
   const parser = getParser(assetsRoot);
   const body = parser.render(markdown || '');
+  // 目录基于渲染产物里的标题 id 构建（≥2 个标题才生成）
+  const tocHtml = buildTocHtml(body, title);
 
   const read = (...p) => fs.readFileSync(path.join(assetsRoot, ...p), 'utf8');
   const katexCss = read('katex', 'katex.min.css');
@@ -240,6 +342,7 @@ function buildStandaloneHtml(markdown, opts) {
   <style>${prismCss}</style>
   <style>${stylesCss}</style>
   <style>${EXPORT_CSS}</style>
+  <style>${TOC_CSS}</style>
   <style>
     html, body { height: auto !important; overflow: visible !important; }
     body { max-width: 860px; margin: 0 auto; padding: 24px 32px; }
@@ -252,8 +355,10 @@ function buildStandaloneHtml(markdown, opts) {
 <body class="vscode-light">
   ${TOOLBAR_HTML}
   <script id="luogu-md-source" type="application/json">${mdSourceJson}</script>
+  ${tocHtml}
   <div id="previewContent" class="preview-content luogu-preview-root">${body}</div>
   <script>${HELPER_SCRIPT}</script>
+  <script>${TOC_SCRIPT}</script>
   ${forPrint ? `<script>${PRINT_SCRIPT}</script>` : ''}
 </body>
 </html>
