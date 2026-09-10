@@ -54,7 +54,14 @@
   // cost of the live preview, which was the main source of typing lag.
   const _katexRenderCache = new Map();
   const _katexRenderCacheMax = 4000;
-  function renderKatexCached(katexLib, formula, optsKey, opts, fallback) {
+  function renderKatexCached(katexLib, formula, optsKey, opts, fallback, noCache) {
+    // Macro-dependent formulas must bypass the memo: \gdef mutates the shared
+    // per-render macros object, so a cached key (formula+options) can go stale
+    // mid-document. noCache callers pay a full render for correctness.
+    if (noCache) {
+      try { return katexLib.renderToString(formula, opts); } catch (e) { return fallback(e); }
+    }
+
     // The key MUST include the formula, otherwise two different formulas that
     // share the same options (e.g. two inline equations) would collide and the
     // second would silently render as the first.
@@ -188,6 +195,12 @@
 
       // Reset global task counter for this render pass
       this.taskCounter = 0;
+      // KaTeX \gdef 全局宏：共享 macros 对象为「同一渲染趟内可见」——宏观上即
+      // 「文档内的 \gdef 对同文档后续公式生效」。每趟重新初始化实现三条隔离：
+      //   1) 编辑重渲染之间的隔离（删掉 \gdef 行后不复度出现）——最重要；
+      //   2) 预览与导出管线隔离（各自独立 LuoguParser 实例再叠加本隔离）；
+      //   3) 多文档/多面板（若将来复用同一 parser）互不渗透。
+      this._katexMacros = {};
       // Reset heading slug registry so anchor ids stay unique across the document
       this.headingSlugs = new Set();
 
@@ -340,17 +353,27 @@
         return false;
       };
 
-      for (const item of store) {
+      // \gdef 要求按「文档序」渲染：stash 提取是四趟规则序（块级 $$ → 独占行 →
+      // 段内 → 行内），与文档流序不一致——后发先至会令「先使用、后定义」的宏错误
+      // 地先渲染（赤红报错）。此处 html 仍含占位 token，indexOf 序即文档序。
+      const orderedStore = [...store].sort((a, b) => html.indexOf(a.id) - html.indexOf(b.id));
+      for (const item of orderedStore) {
         let rendered = '';
         if (katexLib) {
           const displayMode = item.type === 'display';
-          const opts = { displayMode, throwOnError: false, output: 'htmlAndMathml', trust: safeTrust };
-          rendered = renderKatexCached(
+          // \gdef 全局宏（KaTeX ≥0.12 语义）：同一份 macros 对象贯穿本趟所有公式，
+          // 前面的 \gdef 对后面的公式生效；缓存必须让位（宏状态可变，键不变会铬化）。
+          const macrosActive =
+            (this._katexMacros && Object.keys(this._katexMacros).length > 0)
+            || /\\gdef/.test(item.formula);
+          const opts = { displayMode, throwOnError: false, output: 'htmlAndMathml', trust: safeTrust, macros: this._katexMacros };
+                  rendered = renderKatexCached(
             katexLib,
             item.formula,
             `${katexLib.version || 'katex'}\u0001${displayMode}\u0001htmlAndMathml\u0001safeTrust`,
             opts,
-            (e) => `<span class="katex-error" title="${escapeHtml(e.message)}">${escapeHtml(item.formula)}</span>`
+            (e) => `<span class="katex-error" title="${escapeHtml(e.message)}">${escapeHtml(item.formula)}</span>`,
+            macrosActive
           );
         } else {
           rendered = item.type === 'display' 
